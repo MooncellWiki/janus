@@ -7,6 +7,7 @@ use crate::{
 pub struct AppState {
     pub repository: PostgresRepository,
     pub bilibili_config: Option<BilibiliConfig>,
+    pub http_client: reqwest::Client,
 }
 
 pub async fn init_state_with_pg(config: &AppSettings) -> AppState {
@@ -18,5 +19,6 @@ pub async fn init_state_with_pg(config: &AppSettings) -> AppState {
     AppState {
         repository: PostgresRepository { pool },
         bilibili_config: config.bilibili.clone(),
+        http_client: reqwest::Client::new(),
     }
 }

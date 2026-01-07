@@ -101,7 +101,7 @@ fn get_nonce() -> i32 {
 fn get_unix_seconds() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .expect("System time should be after UNIX epoch")
         .as_secs_f64()
 }
 
@@ -112,8 +112,8 @@ async fn upload_image(
     content_type: String,
     sessdata: &str,
     csrf: &str,
+    client: &reqwest::Client,
 ) -> Result<(f64, BilibiliUploadData), String> {
-    let client = reqwest::Client::new();
     let file_size_kb = file_data.len() as f64 / 1024.0;
 
     let file_part = Part::bytes(file_data)
@@ -262,8 +262,6 @@ pub async fn create_dynamic(
         }
     };
 
-    let client = reqwest::Client::new();
-
     // If files are present, upload them first
     if !files.is_empty() {
         info!("Uploading {} files", files.len());
@@ -276,6 +274,7 @@ pub async fn create_dynamic(
                 content_type,
                 &bilibili_config.sessdata,
                 &bilibili_config.csrf,
+                &state.http_client,
             )
             .await
             {
@@ -335,7 +334,7 @@ pub async fn create_dynamic(
             bilibili_config.csrf
         );
 
-        match client
+        match state.http_client
             .post(&url)
             .headers(headers)
             .body(dyn_req.to_string())
@@ -452,7 +451,7 @@ pub async fn create_dynamic(
             bilibili_config.csrf
         );
 
-        match client
+        match state.http_client
             .post(&url)
             .headers(headers)
             .body(dyn_req.to_string())
