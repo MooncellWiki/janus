@@ -25,6 +25,13 @@ host = "http://localhost"
 [database]
 uri = "postgres://ak:ak@localhost:25432/ak_asset_storage_next"
 
+# Bilibili Configuration (optional)
+# [bilibili]
+# sessdata = "your_bilibili_sessdata_cookie"
+# csrf = "your_bilibili_csrf_token"
+# uid = "your_bilibili_user_id"
+# api_key = "your_api_authentication_key"
+
 # [sentry]
 # dsn = ""
 # traces_sample_rate = 1.0

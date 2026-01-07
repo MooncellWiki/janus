@@ -1,4 +1,5 @@
 #![allow(clippy::needless_for_each)]
+mod bilibili_handlers;
 mod misc_handlers;
 use crate::{middleware::apply_axum_middleware, state::AppState};
 use axum::{Json, Router, routing::get};
@@ -10,6 +11,7 @@ use utoipa_scalar::{Scalar, Servable};
 #[openapi(
     tags(
         (name = "health", description = "Health check endpoints"),
+        (name = "bilibili", description = "Bilibili dynamic posting endpoints"),
     ),
 )]
 pub struct ApiDoc;
@@ -19,6 +21,8 @@ pub fn build_router(state: AppState) -> Router {
         // Health endpoints
         .routes(routes!(misc_handlers::ping))
         .routes(routes!(misc_handlers::health))
+        // Bilibili endpoints
+        .routes(routes!(bilibili_handlers::create_dynamic))
         .split_for_parts();
 
     openapi.paths.paths = openapi

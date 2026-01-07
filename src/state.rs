@@ -1,8 +1,12 @@
-use crate::{config::AppSettings, repository::PostgresRepository};
+use crate::{
+    config::{AppSettings, BilibiliConfig},
+    repository::PostgresRepository,
+};
 
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub repository: PostgresRepository,
+    pub bilibili_config: Option<BilibiliConfig>,
 }
 
 pub async fn init_state_with_pg(config: &AppSettings) -> AppState {
@@ -13,5 +17,6 @@ pub async fn init_state_with_pg(config: &AppSettings) -> AppState {
 
     AppState {
         repository: PostgresRepository { pool },
+        bilibili_config: config.bilibili.clone(),
     }
 }
