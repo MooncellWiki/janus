@@ -1,0 +1,30 @@
+# Application logging configuration
+[logger]
+enable = true
+level = "debug"
+format = "compact"
+# override_filter = "trace"  # Uncomment to override filters
+
+# Web server configuration
+[server]
+binding = "0.0.0.0"
+port = 25150
+host = "http://localhost"
+
+# Mailer Configuration
+# [mailer]
+# host = "smtp.qiye.aliyun.com"
+# port = 465
+# from_email = "support@mooncell.wiki"
+# to_email = "1677759063@qq.com"
+# frontend_url = "http://localhost:25150/"
+# auth.user = "support@mooncell.wiki"  # Uncomment and add SMTP user
+# auth.password = "Mooncell70080190"  # Uncomment and add SMTP password
+
+# Database Configuration
+[database]
+uri = "postgres://ak:ak@localhost:25432/ak_asset_storage_next"
+
+# [sentry]
+# dsn = ""
+# traces_sample_rate = 1.0

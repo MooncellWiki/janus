@@ -1,0 +1,65 @@
+[package]
+name = "my-axum-template"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "my-axum-template"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1.0.228", features = [ "derive" ] }
+serde_json = "1.0.149"
+tokio = { version = "1.49.0", features = [
+  "signal",
+  "rt-multi-thread",
+  "macros",
+  "time",
+] }
+async-trait = "0.1.89"
+tracing = "0.1.44"
+chrono = "0.4.42"
+clap = { version = "4.5.54", features = [ "derive" ] }
+axum = { version = "0.8.8", features = [
+  "macros",
+  "multipart"
+] }
+bytes = { version = "1.11.0" }
+tracing-subscriber = { version = "0.3.22", features = [
+  "env-filter",
+  "json"
+] }
+anyhow = "1.0.100"
+tower-http = { version = "0.6.8", features = [
+  "timeout",
+  "trace",
+  "cors",
+  "compression-full",
+  "fs",
+  "set-header"
+] }
+thiserror = "2.0.17"
+toml = "0.9.10"
+utoipa = { version = "5.4.0", features = [
+  "debug",
+  "axum_extras"
+] }
+utoipa-axum = { version = "0.2.0", features = [ "debug" ] }
+utoipa-scalar = { version = "0.3.0", features = [ "axum" ] }
+sqlx = { version = "0.8.6", features = [
+  "runtime-tokio",
+  "postgres",
+  "tls-rustls",
+  "chrono",
+  "uuid",
+] }
+sentry = { version = "0.46.1", features = [
+  "tracing",
+  "tower",
+  "tower-axum-matched-path",
+  "tower-http",
+] }
+tower = "0.5.2"
+futures = "0.3.31"
+mimalloc = "0.1.48"
+serde_variant = "0.1.3"
