@@ -4,26 +4,55 @@ This document describes the Bilibili dynamic posting functionality implemented i
 
 ## Overview
 
-The `/api/v1/createDynamic` endpoint allows posting text and image content to Bilibili as dynamic posts. This implementation is functionally equivalent to the Node.js reference implementation, using Rust with Axum, multipart form handling, and reqwest for HTTP requests.
+The `/api/createDynamic` endpoint allows posting text and image content to Bilibili as dynamic posts. This implementation is functionally equivalent to the Node.js reference implementation, using Rust with Axum, multipart form handling, and reqwest for HTTP requests.
+
+**Authentication:** This endpoint requires JWT authentication using ES256 algorithm.
 
 ## Configuration
 
-Add the following section to your `config.toml`:
+Add the following sections to your `config.toml`:
 
 ```toml
 [bilibili]
 sessdata = "your_bilibili_sessdata_cookie"
 csrf = "your_bilibili_csrf_token"
 uid = "your_bilibili_user_id"
-api_key = "your_api_authentication_key"
+
+[jwt]
+private_key = """-----BEGIN EC PRIVATE KEY-----
+YOUR_PRIVATE_KEY_HERE
+-----END EC PRIVATE KEY-----"""
+public_key = """-----BEGIN PUBLIC KEY-----
+YOUR_PUBLIC_KEY_HERE
+-----END PUBLIC KEY-----"""
 ```
 
 ### Configuration Fields
 
+**Bilibili Config:**
 - **sessdata** (required): Your Bilibili SESSDATA cookie value. This is used for authentication with Bilibili's API.
 - **csrf** (required): Your Bilibili CSRF token. This is required for all POST requests to Bilibili's API.
 - **uid** (required): Your Bilibili user ID. Used to generate unique upload IDs.
-- **api_key** (required): API authentication key used to protect the endpoint from unauthorized access.
+
+**JWT Config:**
+- **private_key** (required): ES256 private key in PEM format for signing JWT tokens.
+- **public_key** (required): ES256 public key in PEM format for verifying JWT tokens.
+
+### Generating JWT Keys
+
+Generate ES256 key pair using OpenSSL:
+
+```bash
+# Generate private key
+openssl ecparam -genkey -name prime256v1 -noout -out private.pem
+
+# Extract public key
+openssl ec -in private.pem -pubout -out public.pem
+
+# View keys to copy into config
+cat private.pem
+cat public.pem
+```
 
 ### Obtaining Bilibili Credentials
 
@@ -31,19 +60,36 @@ api_key = "your_api_authentication_key"
 2. **CSRF**: This is typically available in the bili_jct cookie
 3. **UID**: Your Bilibili user ID, visible in your profile URL
 
+## Generating JWT Tokens
+
+Generate a JWT token using the CLI command:
+
+```bash
+cargo run -- generate-jwt --config config.toml --subject user_id --expires-in 2592000
+```
+
+Options:
+- `--config`: Path to config file (default: config.toml)
+- `--subject`: Subject identifier (e.g., user ID or username)
+- `--expires-in`: Token expiration time in seconds (default: 2592000 = 30 days)
+
 ## API Endpoint
 
-### POST `/api/v1/createDynamic`
+### POST `/api/createDynamic`
 
 Creates a new Bilibili dynamic post with optional images.
 
+**Authentication:** Required via `Authorization: Bearer <jwt_token>` header
+
 #### Request
+
+**Headers:**
+- **Authorization** (required): `Bearer <jwt_token>`
 
 **Content-Type:** `multipart/form-data`
 
 **Form Fields:**
 
-- **key** (required, string): API authentication key (must match `api_key` in config)
 - **msg** (required, string): JSON string containing the dynamic content structure
 - **files** (optional, files): One or more image files to attach to the dynamic
 
@@ -52,16 +98,16 @@ Creates a new Bilibili dynamic post with optional images.
 **Text-only dynamic:**
 
 ```bash
-curl -X POST http://localhost:25150/api/v1/createDynamic \
-  -F "key=your_api_key" \
+curl -X POST http://localhost:25150/api/createDynamic \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F 'msg=[{"type":1,"raw_text":"Hello from Rust API!","biz_id":""}]'
 ```
 
 **Dynamic with a single image:**
 
 ```bash
-curl -X POST http://localhost:25150/api/v1/createDynamic \
-  -F "key=your_api_key" \
+curl -X POST http://localhost:25150/api/createDynamic \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F 'msg=[{"type":1,"raw_text":"Check out this image!","biz_id":""}]' \
   -F "image=@photo.jpg"
 ```
@@ -69,8 +115,8 @@ curl -X POST http://localhost:25150/api/v1/createDynamic \
 **Dynamic with multiple images:**
 
 ```bash
-curl -X POST http://localhost:25150/api/v1/createDynamic \
-  -F "key=your_api_key" \
+curl -X POST http://localhost:25150/api/createDynamic \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F 'msg=[{"type":1,"raw_text":"My photo gallery","biz_id":""}]' \
   -F "image1=@photo1.jpg" \
   -F "image2=@photo2.png" \
@@ -101,13 +147,18 @@ curl -X POST http://localhost:25150/api/v1/createDynamic \
 
 | code | msg | Description |
 |------|-----|-------------|
-| 1 | "wrong key" | Invalid or missing API key |
+| 1 | "Missing authorization header" | Authorization header not provided |
+| 1 | "Invalid authorization header" | Authorization header format is invalid |
+| 1 | "Invalid authorization format, expected: Bearer <token>" | Authorization scheme is not Bearer |
+| 1 | "Token expired" | JWT token has expired |
+| 1 | "Invalid token" | JWT token is malformed or invalid |
+| 1 | "Invalid signature" | JWT signature verification failed |
 | 1 | "need msg" | The msg field is missing or empty |
 | 1 | "upload file fail" | One or more images failed to upload to Bilibili |
 | 1 | "create dynamic fail" | Dynamic creation request failed |
 | 1 | "create dynamic fail with network fatal" | Network error during dynamic creation |
 
-**Note:** Error messages are kept compatible with the Node.js reference implementation.
+**Note:** Error messages for Bilibili API operations are kept compatible with the Node.js reference implementation.
 
 ## Message Format
 
@@ -183,7 +234,10 @@ Where:
 
 The endpoint uses multiple layers of security:
 
-1. **API Key Validation**: Protects the endpoint from unauthorized access
+1. **JWT Authentication**: Protects the endpoint with ES256 signed tokens
+   - Tokens must be included in the `Authorization: Bearer <token>` header
+   - Tokens expire after the configured duration (default: 30 days)
+   - Tokens are verified using the public key from configuration
 2. **Bilibili SESSDATA**: Authenticates requests to Bilibili's API as your user
 3. **CSRF Token**: Prevents cross-site request forgery attacks on Bilibili's API
 
@@ -195,15 +249,15 @@ The implementation uses a shared `reqwest::Client` instance stored in `AppState`
 
 The API is fully documented using OpenAPI/Swagger. Access the interactive documentation at:
 
-- **Scalar UI**: `http://localhost:25150/api/v1/scalar`
-- **OpenAPI JSON**: `http://localhost:25150/api/v1/openapi.json`
+- **Scalar UI**: `http://localhost:25150/api/scalar`
+- **OpenAPI JSON**: `http://localhost:25150/api/openapi.json`
 
 ## Compatibility with Node.js Reference
 
 This implementation is functionally equivalent to the Node.js reference implementation:
 
 ✅ Supports multipart form data with text and images  
-✅ API key authentication  
+✅ JWT authentication (replaces API key for better security)  
 ✅ Bilibili SESSDATA and CSRF validation  
 ✅ Two-step process: upload images first, then create dynamic  
 ✅ Compatible error response format and codes  
@@ -233,9 +287,11 @@ This implementation is functionally equivalent to the Node.js reference implemen
 
 ## Troubleshooting
 
-### "wrong key" error
-- Verify the `api_key` in your config matches the key sent in requests
-- Ensure the key is passed as a form field named "key"
+### JWT Token Issues
+- Verify your token is not expired
+- Ensure the token is passed in the `Authorization: Bearer <token>` header format
+- Check that the public/private key pair in config matches the keys used to generate the token
+- Regenerate token using the CLI command if needed
 
 ### "need msg" error
 - Ensure the msg field is present in the request
@@ -258,9 +314,8 @@ This implementation is functionally equivalent to the Node.js reference implemen
 ### Using with JavaScript/TypeScript
 
 ```typescript
-async function postToBilibili(text: string, images?: File[]) {
+async function postToBilibili(text: string, jwtToken: string, images?: File[]) {
   const formData = new FormData();
-  formData.append('key', 'your_api_key');
   formData.append('msg', JSON.stringify([{
     type: 1,
     raw_text: text,
@@ -273,8 +328,11 @@ async function postToBilibili(text: string, images?: File[]) {
     });
   }
   
-  const response = await fetch('http://localhost:25150/api/v1/createDynamic', {
+  const response = await fetch('http://localhost:25150/api/createDynamic', {
     method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwtToken}`
+    },
     body: formData
   });
   
@@ -287,11 +345,14 @@ async function postToBilibili(text: string, images?: File[]) {
 ```python
 import requests
 
-def post_to_bilibili(text, images=None):
-    url = 'http://localhost:25150/api/v1/createDynamic'
+def post_to_bilibili(text, jwt_token, images=None):
+    url = 'http://localhost:25150/api/createDynamic'
+    
+    headers = {
+        'Authorization': f'Bearer {jwt_token}'
+    }
     
     data = {
-        'key': 'your_api_key',
         'msg': '[{"type":1,"raw_text":"' + text + '","biz_id":""}]'
     }
     
@@ -300,7 +361,7 @@ def post_to_bilibili(text, images=None):
         for i, image_path in enumerate(images):
             files[f'image{i}'] = open(image_path, 'rb')
     
-    response = requests.post(url, data=data, files=files)
+    response = requests.post(url, data=data, files=files, headers=headers)
     return response.json()
 ```
 
