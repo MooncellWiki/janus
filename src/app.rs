@@ -71,12 +71,7 @@ pub async fn run() -> Result<()> {
         } => {
             let config = AppSettings::new(Path::new(&config))?;
 
-            let jwt_config = config
-                .jwt
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("JWT configuration not found in config file"))?;
-
-            let token = generate_token(subject.clone(), &jwt_config.private_key, expires_in)?;
+            let token = generate_token(subject.clone(), &config.jwt.private_key, expires_in)?;
 
             println!(
                 "Generated JWT token for subject '{}' (expires in {} seconds):",

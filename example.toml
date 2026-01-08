@@ -31,7 +31,7 @@ uri = "postgres://ak:ak@localhost:25432/ak_asset_storage_next"
 # csrf = "your_bilibili_csrf_token"
 # uid = "your_bilibili_user_id"
 
-# JWT Configuration (optional, required for Bilibili API)
+# JWT Configuration (required for API authentication)
 # Generate ES256 key pair using: openssl ecparam -genkey -name prime256v1 -noout -out private.pem
 # Extract public key: openssl ec -in private.pem -pubout -out public.pem
 # [jwt]

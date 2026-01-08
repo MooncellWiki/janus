@@ -9,6 +9,7 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, deco
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::warn;
 
 use crate::state::AppState;
 
@@ -75,42 +76,27 @@ pub async fn jwt_auth_middleware(
     request: Request,
     next: Next,
 ) -> Response {
-    // Get JWT config
-    let jwt_config = match &state.jwt_config {
-        Some(config) => config,
-        None => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "code": 1,
-                    "msg": "JWT not configured"
-                })),
-            )
-                .into_response();
-        }
-    };
-
     // Extract Authorization header
     let auth_header = match request.headers().get("Authorization") {
         Some(header) => match header.to_str() {
             Ok(h) => h,
             Err(_) => {
+                warn!("Invalid authorization header format");
                 return (
                     StatusCode::UNAUTHORIZED,
                     Json(json!({
-                        "code": 1,
-                        "msg": "Invalid authorization header"
+                        "code": 1
                     })),
                 )
                     .into_response();
             }
         },
         None => {
+            warn!("Missing authorization header");
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(json!({
-                    "code": 1,
-                    "msg": "Missing authorization header"
+                    "code": 1
                 })),
             )
                 .into_response();
@@ -121,11 +107,11 @@ pub async fn jwt_auth_middleware(
     let token = match extract_token_from_header(auth_header) {
         Some(t) => t,
         None => {
+            warn!("Invalid authorization format, expected: Bearer <token>");
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(json!({
-                    "code": 1,
-                    "msg": "Invalid authorization format, expected: Bearer <token>"
+                    "code": 1
                 })),
             )
                 .into_response();
@@ -133,24 +119,17 @@ pub async fn jwt_auth_middleware(
     };
 
     // Verify token
-    match verify_token(token, &jwt_config.public_key) {
+    match verify_token(token, &state.jwt_config.public_key) {
         Ok(_claims) => {
             // Token is valid, proceed with request
             next.run(request).await
         }
         Err(err) => {
-            let msg = match err.kind() {
-                jsonwebtoken::errors::ErrorKind::ExpiredSignature => "Token expired",
-                jsonwebtoken::errors::ErrorKind::InvalidToken => "Invalid token",
-                jsonwebtoken::errors::ErrorKind::InvalidSignature => "Invalid signature",
-                _ => "Token verification failed",
-            };
-
+            warn!("JWT verification failed: {:?}", err);
             (
                 StatusCode::UNAUTHORIZED,
                 Json(json!({
-                    "code": 1,
-                    "msg": msg
+                    "code": 1
                 })),
             )
                 .into_response()

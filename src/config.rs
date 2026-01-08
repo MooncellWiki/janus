@@ -146,7 +146,7 @@ pub struct AppSettings {
     pub mailer: Option<SmtpConfig>,
     pub sentry: Option<SentryConfig>,
     pub bilibili: Option<BilibiliConfig>,
-    pub jwt: Option<JwtConfig>,
+    pub jwt: JwtConfig,
 }
 
 impl AppSettings {
