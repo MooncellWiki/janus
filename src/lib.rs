@@ -1,4 +1,5 @@
 pub mod app;
+pub mod auth;
 mod config;
 mod middleware;
 mod repository;

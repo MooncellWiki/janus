@@ -102,8 +102,15 @@ pub struct BilibiliConfig {
     pub csrf: String,
     /// Bilibili user ID
     pub uid: String,
-    /// API authentication key
-    pub api_key: String,
+}
+
+/// JWT configuration for authentication
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct JwtConfig {
+    /// ES256 private key in PEM format
+    pub private_key: String,
+    /// ES256 public key in PEM format
+    pub public_key: String,
 }
 
 /// Server configuration for application use
@@ -139,6 +146,7 @@ pub struct AppSettings {
     pub mailer: Option<SmtpConfig>,
     pub sentry: Option<SentryConfig>,
     pub bilibili: Option<BilibiliConfig>,
+    pub jwt: Option<JwtConfig>,
 }
 
 impl AppSettings {

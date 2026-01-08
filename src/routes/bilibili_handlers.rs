@@ -189,7 +189,6 @@ pub async fn create_dynamic(
     };
 
     let mut msg: Option<String> = None;
-    let mut key: Option<String> = None;
     let mut files: Vec<(Vec<u8>, String, String)> = Vec::new();
 
     // Parse multipart form data
@@ -199,9 +198,6 @@ pub async fn create_dynamic(
         match field_name.as_str() {
             "msg" => {
                 msg = field.text().await.ok();
-            }
-            "key" => {
-                key = field.text().await.ok();
             }
             _ => {
                 // Assume it's a file upload
@@ -217,18 +213,6 @@ pub async fn create_dynamic(
                 }
             }
         }
-    }
-
-    // Validate key
-    if key.as_deref() != Some(&bilibili_config.api_key) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(DynamicResponse {
-                code: 1,
-                msg: Some("wrong key".to_string()),
-                exception: None,
-            }),
-        );
     }
 
     // Validate msg
@@ -334,7 +318,8 @@ pub async fn create_dynamic(
             bilibili_config.csrf
         );
 
-        match state.http_client
+        match state
+            .http_client
             .post(&url)
             .headers(headers)
             .body(dyn_req.to_string())
@@ -451,7 +436,8 @@ pub async fn create_dynamic(
             bilibili_config.csrf
         );
 
-        match state.http_client
+        match state
+            .http_client
             .post(&url)
             .headers(headers)
             .body(dyn_req.to_string())

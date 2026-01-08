@@ -5,6 +5,7 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 use crate::{
+    auth::generate_token,
     config::AppSettings,
     repository::Repository,
     routes::build_router,
@@ -21,6 +22,17 @@ pub enum Commands {
     Server {
         #[arg(short, long, default_value = "config.toml")]
         config: String,
+    },
+    /// Generate a JWT token
+    GenerateJwt {
+        #[arg(short, long, default_value = "config.toml")]
+        config: String,
+        /// Subject for the JWT (e.g., user ID or identifier)
+        #[arg(short, long)]
+        subject: String,
+        /// Token expiration time in seconds (default: 30 days)
+        #[arg(short, long, default_value = "2592000")]
+        expires_in: u64,
     },
     /// Show version information
     Version,
@@ -50,6 +62,28 @@ pub async fn run() -> Result<()> {
             init_tracing(&config.logger);
             let _sentry_guard = &config.sentry.as_ref().map(init_sentry);
             start(&config).await?;
+            Ok(())
+        }
+        Commands::GenerateJwt {
+            config,
+            subject,
+            expires_in,
+        } => {
+            let config = AppSettings::new(Path::new(&config))?;
+
+            let jwt_config = config
+                .jwt
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("JWT configuration not found in config file"))?;
+
+            let token = generate_token(subject.clone(), &jwt_config.private_key, expires_in)?;
+
+            println!(
+                "Generated JWT token for subject '{}' (expires in {} seconds):",
+                subject, expires_in
+            );
+            println!("{}", token);
+
             Ok(())
         }
         Commands::Version => {

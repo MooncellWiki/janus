@@ -1,5 +1,5 @@
 use crate::{
-    config::{AppSettings, BilibiliConfig},
+    config::{AppSettings, BilibiliConfig, JwtConfig},
     repository::PostgresRepository,
 };
 
@@ -7,6 +7,7 @@ use crate::{
 pub struct AppState {
     pub repository: PostgresRepository,
     pub bilibili_config: Option<BilibiliConfig>,
+    pub jwt_config: Option<JwtConfig>,
     pub http_client: reqwest::Client,
 }
 
@@ -19,6 +20,7 @@ pub async fn init_state_with_pg(config: &AppSettings) -> AppState {
     AppState {
         repository: PostgresRepository { pool },
         bilibili_config: config.bilibili.clone(),
+        jwt_config: config.jwt.clone(),
         http_client: reqwest::Client::new(),
     }
 }
