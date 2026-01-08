@@ -99,7 +99,7 @@ pub struct BilibiliConfig {
     /// Bilibili SESSDATA cookie value
     pub sessdata: String,
     /// Bilibili CSRF token
-    pub csrf: String,
+    pub bili_jct: String,
 }
 
 /// JWT configuration for authentication

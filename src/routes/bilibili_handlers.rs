@@ -113,7 +113,7 @@ async fn upload_image(
     file_name: String,
     content_type: String,
     sessdata: &str,
-    csrf: &str,
+    bili_jct: &str,
     client: &reqwest::Client,
 ) -> Result<(f64, BilibiliUploadData), String> {
     let file_size_kb = file_data.len() as f64 / 1024.0;
@@ -127,7 +127,7 @@ async fn upload_image(
         .part("file_up", file_part)
         .text("biz", "draw")
         .text("category", "daily")
-        .text("csrf", csrf.to_string());
+        .text("csrf", bili_jct.to_string());
 
     let resp = client
         .post("https://api.bilibili.com/x/dynamic/feed/draw/upload_bfs")
@@ -249,7 +249,7 @@ pub async fn create_dynamic(
                 file_name,
                 content_type,
                 &bilibili_config.sessdata,
-                &bilibili_config.csrf,
+                &bilibili_config.bili_jct,
                 &state.http_client,
             )
             .await
@@ -303,7 +303,7 @@ pub async fn create_dynamic(
 
         let url = format!(
             "https://api.bilibili.com/x/dynamic/feed/create/dyn?platform=web&csrf={}",
-            bilibili_config.csrf
+            bilibili_config.bili_jct
         );
 
         match state
@@ -411,7 +411,7 @@ pub async fn create_dynamic(
 
         let url = format!(
             "https://api.bilibili.com/x/dynamic/feed/create/dyn?platform=web&csrf={}",
-            bilibili_config.csrf
+            bilibili_config.bili_jct
         );
 
         match state

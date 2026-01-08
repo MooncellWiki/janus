@@ -4,9 +4,10 @@ This document describes the Bilibili dynamic posting functionality implemented i
 
 ## Overview
 
-The `/api/createDynamic` endpoint allows posting text and image content to Bilibili as dynamic posts. This implementation is functionally equivalent to the Node.js reference implementation, using Rust with Axum, multipart form handling, and reqwest for HTTP requests.
+The `POST /api/createDynamic` endpoint posts text and optional images to Bilibili as a dynamic.
 
-**Authentication:** This endpoint requires JWT authentication using ES256 algorithm.
+- **Authentication:** Required. The route is protected by JWT middleware and expects `Authorization: Bearer <token>`.
+- **Implementation:** Axum multipart parsing + `reqwest` calls to Bilibili’s web APIs.
 
 ## Configuration
 
@@ -15,8 +16,7 @@ Add the following sections to your `config.toml`:
 ```toml
 [bilibili]
 sessdata = "your_bilibili_sessdata_cookie"
-csrf = "your_bilibili_csrf_token"
-uid = "your_bilibili_user_id"
+bili_jct = "your_bilibili_bili_jct" # usually from `bili_jct`
 
 [jwt]
 private_key = """-----BEGIN EC PRIVATE KEY-----
@@ -30,9 +30,8 @@ YOUR_PUBLIC_KEY_HERE
 ### Configuration Fields
 
 **Bilibili Config:**
-- **sessdata** (required): Your Bilibili SESSDATA cookie value. This is used for authentication with Bilibili's API.
-- **csrf** (required): Your Bilibili CSRF token. This is required for all POST requests to Bilibili's API.
-- **uid** (required): Your Bilibili user ID. Used to generate unique upload IDs.
+- **sessdata** (required): Your Bilibili `SESSDATA` cookie value.
+- **bili_jct** (required): Your Bilibili `bili_jct` cookie value. Used both as a request parameter and as a form field for image upload.
 
 **JWT Config:**
 - **private_key** (required): ES256 private key in PEM format for signing JWT tokens.
@@ -43,35 +42,30 @@ YOUR_PUBLIC_KEY_HERE
 Generate ES256 key pair using OpenSSL:
 
 ```bash
-# Generate private key
 openssl ecparam -genkey -name prime256v1 -noout -out private.pem
-
-# Extract public key
 openssl ec -in private.pem -pubout -out public.pem
-
-# View keys to copy into config
-cat private.pem
-cat public.pem
 ```
 
 ### Obtaining Bilibili Credentials
 
-1. **SESSDATA**: Log into Bilibili in your browser and extract the SESSDATA cookie value from your browser's developer tools (Application/Storage > Cookies)
-2. **CSRF**: This is typically available in the bili_jct cookie
-3. **UID**: Your Bilibili user ID, visible in your profile URL
+1. **SESSDATA**: Log into Bilibili in your browser and extract the `SESSDATA` cookie value.
+2. **bili_jct**: Log into Bilibili in your browser and extract the `bili_jct` cookie value.
 
 ## Generating JWT Tokens
 
 Generate a JWT token using the CLI command:
 
 ```bash
-cargo run -- generate-jwt --config config.toml --subject user_id --expires-in 2592000
+cargo run -- generate-jwt --config config.toml --subject user_id
 ```
 
 Options:
-- `--config`: Path to config file (default: config.toml)
+- `--config`: Path to config file (default: `config.toml`)
 - `--subject`: Subject identifier (e.g., user ID or username)
-- `--expires-in`: Token expiration time in seconds (default: 2592000 = 30 days)
+
+Notes:
+- Tokens are ES256 signed.
+- This implementation does not validate `exp` (no expiration claim is required/checked).
 
 ## API Endpoint
 
@@ -79,7 +73,7 @@ Options:
 
 Creates a new Bilibili dynamic post with optional images.
 
-**Authentication:** Required via `Authorization: Bearer <jwt_token>` header
+**Authentication:** Required via `Authorization: Bearer <jwt_token>` header.
 
 #### Request
 
@@ -89,9 +83,8 @@ Creates a new Bilibili dynamic post with optional images.
 **Content-Type:** `multipart/form-data`
 
 **Form Fields:**
-
-- **msg** (required, string): JSON string containing the dynamic content structure
-- **files** (optional, files): One or more image files to attach to the dynamic
+- **msg** (required, string): JSON value that will be sent to Bilibili as `dyn_req.content.contents`.
+- **file(s)** (optional): Any multipart field *with a filename* is treated as an uploaded image. The server does not require a specific field name like `files`, `image`, etc.
 
 #### Request Examples
 
@@ -129,36 +122,38 @@ curl -X POST http://localhost:25150/api/createDynamic \
 
 ```json
 {
-  "code": 0
+  "code": 0,
+  "data": {
+    "doc_id": 123,
+    "dynamic_id": 456,
+    "create_result": 0,
+    "errmsg": null
+  }
 }
 ```
 
-**Error Response (HTTP 200/400/500):**
+Notes:
+- `data` may be omitted (`null`) even when Bilibili returns `code = 0`.
 
-```json
-{
-  "code": 1,
-  "msg": "error description",
-  "exception": { /* optional error details */ }
-}
-```
+**Error Response:**
+
+- Auth failures return **HTTP 401** with body `{ "code": 1 }`.
+- Validation / Bilibili failures return a `DynamicResponse` JSON with `code: 1` and optional `msg`/`exception`.
 
 #### Error Codes and Messages
 
-| code | msg | Description |
-|------|-----|-------------|
-| 1 | "Missing authorization header" | Authorization header not provided |
-| 1 | "Invalid authorization header" | Authorization header format is invalid |
-| 1 | "Invalid authorization format, expected: Bearer <token>" | Authorization scheme is not Bearer |
-| 1 | "Token expired" | JWT token has expired |
-| 1 | "Invalid token" | JWT token is malformed or invalid |
-| 1 | "Invalid signature" | JWT signature verification failed |
-| 1 | "need msg" | The msg field is missing or empty |
-| 1 | "upload file fail" | One or more images failed to upload to Bilibili |
-| 1 | "create dynamic fail" | Dynamic creation request failed |
-| 1 | "create dynamic fail with network fatal" | Network error during dynamic creation |
+| HTTP | code | msg | Description |
+|------|------|-----|-------------|
+| 401 | 1 | *(none)* | Missing/invalid Authorization header or JWT verification failed |
+| 400 | 1 | "need msg" | The `msg` field is missing or empty |
+| 400 | 1 | "Invalid msg format: ..." | The `msg` field is not valid JSON |
+| 500 | 1 | "upload file fail" | One or more images failed to upload to Bilibili |
+| 200 | 1 | *(none)* | Bilibili returned non-zero `code` for dynamic creation (see `exception`) |
+| 500 | 1 | "create dynamic fail" | Failed to parse Bilibili create response |
+| 500 | 1 | "create dynamic fail with network fatal" | Network error or failed to read response (image-flow) |
 
-**Note:** Error messages for Bilibili API operations are kept compatible with the Node.js reference implementation.
+Note:
+- For Bilibili errors, the server passes Bilibili’s response through in `exception`.
 
 ## Message Format
 
@@ -221,18 +216,18 @@ The `msg` field must contain a valid JSON array representing the dynamic content
 ### Upload ID Generation
 
 Each dynamic creation request includes a unique `upload_id` in the format:
+
 ```
-{user_id}_{unix_timestamp}_{random_nonce}
+{unix_timestamp_seconds}_{random_nonce}
 ```
 
 Where:
-- `user_id`: The configured Bilibili UID
-- `unix_timestamp`: Current time in seconds since Unix epoch
+- `unix_timestamp_seconds`: Current time in seconds since Unix epoch (floating-point, as produced by `as_secs_f64()`)
 - `random_nonce`: Random 4-digit number (1000-9999)
 
 ### Authentication Flow
 
-The endpoint uses multiple layers of security:
+The endpoint uses multiple layers of authentication:
 
 1. **JWT Authentication**: Protects the endpoint with ES256 signed tokens
    - Tokens must be included in the `Authorization: Bearer <token>` header
@@ -247,22 +242,20 @@ The implementation uses a shared `reqwest::Client` instance stored in `AppState`
 
 ## OpenAPI Documentation
 
-The API is fully documented using OpenAPI/Swagger. Access the interactive documentation at:
+The API is documented with OpenAPI. Access the interactive documentation at:
 
 - **Scalar UI**: `http://localhost:25150/api/scalar`
 - **OpenAPI JSON**: `http://localhost:25150/api/openapi.json`
 
-## Compatibility with Node.js Reference
+## Notes on Current Implementation
 
-This implementation is functionally equivalent to the Node.js reference implementation:
+A few details are intentionally aligned with (or differ from) the original reference implementations:
 
-✅ Supports multipart form data with text and images  
-✅ JWT authentication (replaces API key for better security)  
-✅ Bilibili SESSDATA and CSRF validation  
-✅ Two-step process: upload images first, then create dynamic  
-✅ Compatible error response format and codes  
-✅ Support for both text-only and image dynamics  
-✅ Proper scene selection (1 for text, 2 for images)  
+- Multipart parsing treats any part with `filename` as an image (field name does not matter).
+- Image uploads are sent to Bilibili BFS endpoint `POST /x/dynamic/feed/draw/upload_bfs` with form fields: `file_up`, `biz=draw`, `category=daily`, `csrf`.
+- Dynamic creation is sent to `POST /x/dynamic/feed/create/dyn?platform=web&csrf=...` with JSON body containing `dyn_req`.
+- `upload_id` does not include UID (current format: `{timestamp_seconds}_{nonce}`).
+- For Bilibili create failures (`code != 0`), this API returns HTTP 200 with `{ code: 1, exception: <bilibili response> }`.
 
 ## Deployment Considerations
 
@@ -299,7 +292,7 @@ This implementation is functionally equivalent to the Node.js reference implemen
 - Check that you're using the correct form field name ("msg")
 
 ### "upload file fail" error
-- Verify your SESSDATA and CSRF tokens are valid and not expired
+- Verify your SESSDATA and bili_jct tokens are valid and not expired
 - Check that image files are not corrupted
 - Ensure images are in supported formats (JPG, PNG, etc.)
 - Check Bilibili API status
