@@ -236,7 +236,7 @@ The endpoint uses multiple layers of security:
 
 1. **JWT Authentication**: Protects the endpoint with ES256 signed tokens
    - Tokens must be included in the `Authorization: Bearer <token>` header
-   - Tokens expire after the configured duration (default: 30 days)
+   - Tokens are long-lived and, in the current implementation, do **not** automatically expire; you must rotate/revoke tokens explicitly if they are leaked or no longer needed
    - Tokens are verified using the public key from configuration
 2. **Bilibili SESSDATA**: Authenticates requests to Bilibili's API as your user
 3. **CSRF Token**: Prevents cross-site request forgery attacks on Bilibili's API
