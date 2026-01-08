@@ -13,20 +13,18 @@ use tracing::warn;
 
 use crate::state::AppState;
 
-/// JWT Claims structure
+/// JWT Claims structure using standard registered claims
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
     /// Subject (user identifier)
     pub sub: String,
-    /// Expiration time (as Unix timestamp)
-    pub exp: u64,
     /// Issued at (as Unix timestamp)
     pub iat: u64,
 }
 
 impl Claims {
-    /// Create new claims with given subject and expiration duration in seconds
-    pub fn new(subject: String, expires_in_secs: u64) -> Self {
+    /// Create new claims with given subject
+    pub fn new(subject: String) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
@@ -35,7 +33,6 @@ impl Claims {
         Self {
             sub: subject,
             iat: now,
-            exp: now + expires_in_secs,
         }
     }
 }
@@ -44,9 +41,8 @@ impl Claims {
 pub fn generate_token(
     subject: String,
     private_key_pem: &str,
-    expires_in_secs: u64,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    let claims = Claims::new(subject, expires_in_secs);
+    let claims = Claims::new(subject);
     let encoding_key = EncodingKey::from_ec_pem(private_key_pem.as_bytes())?;
     let header = Header::new(Algorithm::ES256);
     encode(&header, &claims, &encoding_key)
@@ -59,7 +55,7 @@ pub fn verify_token(
 ) -> Result<Claims, jsonwebtoken::errors::Error> {
     let decoding_key = DecodingKey::from_ec_pem(public_key_pem.as_bytes())?;
     let mut validation = Validation::new(Algorithm::ES256);
-    validation.validate_exp = true;
+    validation.validate_exp = false; // No expiration validation
 
     let token_data = decode::<Claims>(token, &decoding_key, &validation)?;
     Ok(token_data.claims)

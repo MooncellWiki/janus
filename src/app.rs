@@ -30,9 +30,6 @@ pub enum Commands {
         /// Subject for the JWT (e.g., user ID or identifier)
         #[arg(short, long)]
         subject: String,
-        /// Token expiration time in seconds (default: 30 days)
-        #[arg(short, long, default_value = "2592000")]
-        expires_in: u64,
     },
     /// Show version information
     Version,
@@ -64,19 +61,12 @@ pub async fn run() -> Result<()> {
             start(&config).await?;
             Ok(())
         }
-        Commands::GenerateJwt {
-            config,
-            subject,
-            expires_in,
-        } => {
+        Commands::GenerateJwt { config, subject } => {
             let config = AppSettings::new(Path::new(&config))?;
 
-            let token = generate_token(subject.clone(), &config.jwt.private_key, expires_in)?;
+            let token = generate_token(subject.clone(), &config.jwt.private_key)?;
 
-            println!(
-                "Generated JWT token for subject '{}' (expires in {} seconds):",
-                subject, expires_in
-            );
+            println!("Generated JWT token for subject '{}':", subject);
             println!("{}", token);
 
             Ok(())
