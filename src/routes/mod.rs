@@ -13,8 +13,30 @@ use utoipa_scalar::{Scalar, Servable};
         (name = "health", description = "Health check endpoints"),
         (name = "bilibili", description = "Bilibili dynamic posting endpoints"),
     ),
+    components(
+        schemas(bilibili_handlers::DynamicResponse)
+    ),
+    modifiers(&SecurityAddon)
 )]
 pub struct ApiDoc;
+
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearer_auth",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::HttpBuilder::new()
+                        .scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .build(),
+                ),
+            )
+        }
+    }
+}
 
 pub fn build_router(state: AppState) -> Router {
     let (api_routes, mut openapi) = OpenApiRouter::with_openapi(ApiDoc::openapi())
