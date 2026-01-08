@@ -19,6 +19,8 @@ pub struct DynamicResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub msg: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub exception: Option<serde_json::Value>,
 }
 
@@ -174,19 +176,7 @@ pub async fn create_dynamic(
     mut multipart: Multipart,
 ) -> (StatusCode, Json<DynamicResponse>) {
     // Extract Bilibili config
-    let bilibili_config = match &state.bilibili_config {
-        Some(config) => config,
-        None => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(DynamicResponse {
-                    code: 1,
-                    msg: Some("Bilibili configuration not found".to_string()),
-                    exception: None,
-                }),
-            );
-        }
-    };
+    let bilibili_config = &state.bilibili_config;
 
     let mut msg: Option<String> = None;
     let mut files: Vec<(Vec<u8>, String, String)> = Vec::new();
@@ -224,6 +214,7 @@ pub async fn create_dynamic(
                 Json(DynamicResponse {
                     code: 1,
                     msg: Some("need msg".to_string()),
+                    data: None,
                     exception: None,
                 }),
             );
@@ -240,6 +231,7 @@ pub async fn create_dynamic(
                 Json(DynamicResponse {
                     code: 1,
                     msg: Some(format!("Invalid msg format: {}", e)),
+                    data: None,
                     exception: None,
                 }),
             );
@@ -277,6 +269,7 @@ pub async fn create_dynamic(
                         Json(DynamicResponse {
                             code: 1,
                             msg: Some("upload file fail".to_string()),
+                            data: None,
                             exception: Some(serde_json::json!({ "error": e })),
                         }),
                     );
@@ -285,12 +278,7 @@ pub async fn create_dynamic(
         }
 
         // Create dynamic with images (scene 2)
-        let upload_id = format!(
-            "{}_{}_{}",
-            bilibili_config.uid,
-            get_unix_seconds(),
-            get_nonce()
-        );
+        let upload_id = format!("{}_{}", get_unix_seconds(), get_nonce());
 
         let dyn_req = serde_json::json!({
             "dyn_req": {
@@ -337,29 +325,21 @@ pub async fn create_dynamic(
                                     Json(DynamicResponse {
                                         code: 1,
                                         msg: None,
+                                        data: None,
                                         exception: Some(serde_json::json!(r)),
                                     }),
                                 );
                             }
-                            if let Some(ref data) = r.data
-                                && data.doc_id.is_some()
-                                && data.dynamic_id.is_some()
-                            {
-                                return (
-                                    StatusCode::OK,
-                                    Json(DynamicResponse {
-                                        code: 0,
-                                        msg: None,
-                                        exception: None,
-                                    }),
-                                );
-                            }
+
+                            // Bilibili sometimes returns `code=0` but `data=null`.
+                            // Treat `code=0` as success and pass through the raw data.
                             (
                                 StatusCode::OK,
                                 Json(DynamicResponse {
-                                    code: 1,
+                                    code: 0,
                                     msg: None,
-                                    exception: Some(serde_json::json!(r)),
+                                    data: r.data.as_ref().map(|d| serde_json::json!(d)),
+                                    exception: None,
                                 }),
                             )
                         }
@@ -370,6 +350,7 @@ pub async fn create_dynamic(
                                 Json(DynamicResponse {
                                     code: 1,
                                     msg: Some("create dynamic fail".to_string()),
+                                    data: None,
                                     exception: Some(
                                         serde_json::json!({ "body": body, "error": e.to_string() }),
                                     ),
@@ -385,6 +366,7 @@ pub async fn create_dynamic(
                         Json(DynamicResponse {
                             code: 1,
                             msg: Some("create dynamic fail with network fatal".to_string()),
+                            data: None,
                             exception: Some(serde_json::json!({ "error": e.to_string() })),
                         }),
                     )
@@ -397,6 +379,7 @@ pub async fn create_dynamic(
                     Json(DynamicResponse {
                         code: 1,
                         msg: Some("create dynamic fail with network fatal".to_string()),
+                        data: None,
                         exception: Some(serde_json::json!({ "error": e.to_string() })),
                     }),
                 )
@@ -404,12 +387,7 @@ pub async fn create_dynamic(
         }
     } else {
         // Create text-only dynamic (scene 1)
-        let upload_id = format!(
-            "{}_{}_{}",
-            bilibili_config.uid,
-            get_unix_seconds(),
-            get_nonce()
-        );
+        let upload_id = format!("{}_{}", get_unix_seconds(), get_nonce());
 
         let dyn_req = serde_json::json!({
             "dyn_req": {
@@ -455,30 +433,21 @@ pub async fn create_dynamic(
                                     Json(DynamicResponse {
                                         code: 1,
                                         msg: None,
+                                        data: None,
                                         exception: Some(serde_json::json!(r)),
                                     }),
                                 );
                             }
-                            if let Some(ref data) = r.data
-                                && data.create_result.is_some()
-                                && data.errmsg.is_some()
-                                && data.dynamic_id.is_some()
-                            {
-                                return (
-                                    StatusCode::OK,
-                                    Json(DynamicResponse {
-                                        code: 0,
-                                        msg: None,
-                                        exception: None,
-                                    }),
-                                );
-                            }
+
+                            // Bilibili sometimes returns `code=0` but incomplete/partial data.
+                            // Treat `code=0` as success and pass through the raw data.
                             (
                                 StatusCode::OK,
                                 Json(DynamicResponse {
-                                    code: 1,
+                                    code: 0,
                                     msg: None,
-                                    exception: Some(serde_json::json!(r)),
+                                    data: r.data.as_ref().map(|d| serde_json::json!(d)),
+                                    exception: None,
                                 }),
                             )
                         }
@@ -489,6 +458,7 @@ pub async fn create_dynamic(
                                 Json(DynamicResponse {
                                     code: 1,
                                     msg: Some("create dynamic fail".to_string()),
+                                    data: None,
                                     exception: Some(serde_json::json!({ "error": e.to_string() })),
                                 }),
                             )
@@ -502,6 +472,7 @@ pub async fn create_dynamic(
                         Json(DynamicResponse {
                             code: 1,
                             msg: Some("create dynamic fail".to_string()),
+                            data: None,
                             exception: Some(serde_json::json!({ "error": e.to_string() })),
                         }),
                     )
@@ -514,6 +485,7 @@ pub async fn create_dynamic(
                     Json(DynamicResponse {
                         code: 1,
                         msg: Some("create dynamic fail".to_string()),
+                        data: None,
                         exception: Some(serde_json::json!({ "error": e.to_string() })),
                     }),
                 )

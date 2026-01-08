@@ -100,8 +100,6 @@ pub struct BilibiliConfig {
     pub sessdata: String,
     /// Bilibili CSRF token
     pub csrf: String,
-    /// Bilibili user ID
-    pub uid: String,
 }
 
 /// JWT configuration for authentication
@@ -145,7 +143,7 @@ pub struct AppSettings {
     pub database: DatabaseConfig,
     pub mailer: Option<SmtpConfig>,
     pub sentry: Option<SentryConfig>,
-    pub bilibili: Option<BilibiliConfig>,
+    pub bilibili: BilibiliConfig,
     pub jwt: JwtConfig,
 }
 

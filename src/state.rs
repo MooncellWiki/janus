@@ -6,7 +6,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub repository: PostgresRepository,
-    pub bilibili_config: Option<BilibiliConfig>,
+    pub bilibili_config: BilibiliConfig,
     pub jwt_config: JwtConfig,
     pub http_client: reqwest::Client,
 }

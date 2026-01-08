@@ -43,6 +43,7 @@ pub fn generate_token(
     private_key_pem: &str,
 ) -> Result<String, jsonwebtoken::errors::Error> {
     let claims = Claims::new(subject);
+    let private_key_pem = private_key_pem.trim();
     let encoding_key = EncodingKey::from_ec_pem(private_key_pem.as_bytes())?;
     let header = Header::new(Algorithm::ES256);
     encode(&header, &claims, &encoding_key)
@@ -53,6 +54,7 @@ pub fn verify_token(
     token: &str,
     public_key_pem: &str,
 ) -> Result<Claims, jsonwebtoken::errors::Error> {
+    let public_key_pem = public_key_pem.trim();
     let decoding_key = DecodingKey::from_ec_pem(public_key_pem.as_bytes())?;
     let mut validation = Validation::new(Algorithm::ES256);
     validation.validate_exp = false; // No expiration validation
