@@ -1,16 +1,13 @@
 use axum::{
-    Json,
     extract::{Request, State},
-    http::StatusCode,
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::warn;
 
+use crate::error::AppError;
 use crate::state::AppState;
 
 /// JWT Claims structure using standard registered claims
@@ -73,64 +70,31 @@ pub async fn jwt_auth_middleware(
     State(state): State<AppState>,
     request: Request,
     next: Next,
-) -> Response {
+) -> Result<Response, AppError> {
     // Extract Authorization header
-    let auth_header = match request.headers().get("Authorization") {
-        Some(header) => match header.to_str() {
-            Ok(h) => h,
-            Err(_) => {
-                warn!("Invalid authorization header format");
-                return (
-                    StatusCode::UNAUTHORIZED,
-                    Json(json!({
-                        "code": 1
-                    })),
-                )
-                    .into_response();
-            }
-        },
-        None => {
-            warn!("Missing authorization header");
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({
-                    "code": 1
-                })),
-            )
-                .into_response();
-        }
-    };
+    let auth_header = request
+        .headers()
+        .get("Authorization")
+        .ok_or_else(|| {
+            AppError::Unauthorized(anyhow::anyhow!("Missing authorization header"))
+        })?
+        .to_str()
+        .map_err(|_| {
+            AppError::Unauthorized(anyhow::anyhow!("Invalid authorization header format"))
+        })?;
 
     // Extract token from Bearer scheme
-    let token = match extract_token_from_header(auth_header) {
-        Some(t) => t,
-        None => {
-            warn!("Invalid authorization format, expected: Bearer <token>");
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({
-                    "code": 1
-                })),
-            )
-                .into_response();
-        }
-    };
+    let token = extract_token_from_header(auth_header).ok_or_else(|| {
+        AppError::Unauthorized(anyhow::anyhow!(
+            "Invalid authorization format, expected: Bearer <token>"
+        ))
+    })?;
 
     // Verify token
-    match verify_token(token, &state.jwt_config.public_key) {
-        Ok(_claims) => {
-            // Token is valid, proceed with request
-            next.run(request).await
-        }
-        Err(err) => {
-            warn!("JWT verification failed: {:?}", err);
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({
-                    "code": 1
-                })),
-            )
-                .into_response()
-        }
-    }
+    verify_token(token, &state.jwt_config.public_key).map_err(|err| {
+        AppError::Unauthorized(anyhow::anyhow!("JWT verification failed: {}", err))
+    })?;
+
+    // Token is valid, proceed with request
+    Ok(next.run(request).await)
 }
