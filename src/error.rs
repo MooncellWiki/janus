@@ -12,6 +12,9 @@ pub enum AppError {
     #[error("Bad request: {0}")]
     BadRequest(#[source] anyhow::Error),
 
+    #[error("Unauthorized: {0}")]
+    Unauthorized(#[source] anyhow::Error),
+
     #[error("Internal error: {0}")]
     InternalError(#[source] anyhow::Error),
 }
@@ -21,6 +24,7 @@ impl AppError {
     pub fn status_code(&self) -> StatusCode {
         match self {
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
