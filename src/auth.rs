@@ -7,7 +7,7 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, deco
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::error::AppError;
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 
 /// JWT Claims structure using standard registered claims
@@ -70,7 +70,7 @@ pub async fn jwt_auth_middleware(
     State(state): State<AppState>,
     request: Request,
     next: Next,
-) -> Result<Response, AppError> {
+) -> AppResult<Response> {
     // Extract Authorization header
     let auth_header = request
         .headers()
