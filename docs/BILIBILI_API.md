@@ -138,22 +138,22 @@ Notes:
 **Error Response:**
 
 - Auth failures return **HTTP 401** with body `{ "code": 1 }`.
-- Validation / Bilibili failures return a `DynamicResponse` JSON with `code: 1` and optional `msg`/`exception`.
+- Validation / Bilibili failures return JSON with body `{ "code": 1 }`. No additional error message fields are included in the response; detailed error information is only logged internally.
 
-#### Error Codes and Messages
+#### Error Codes (Conceptual)
 
-| HTTP | code | msg | Description |
-|------|------|-----|-------------|
-| 401 | 1 | *(none)* | Missing/invalid Authorization header or JWT verification failed |
-| 400 | 1 | "need msg" | The `msg` field is missing or empty |
-| 400 | 1 | "Invalid msg format: ..." | The `msg` field is not valid JSON |
-| 500 | 1 | "upload file fail" | One or more images failed to upload to Bilibili |
-| 200 | 1 | *(none)* | Bilibili returned non-zero `code` for dynamic creation (see `exception`) |
-| 500 | 1 | "create dynamic fail" | Failed to parse Bilibili create response |
-| 500 | 1 | "create dynamic fail with network fatal" | Network error or failed to read response (image-flow) |
+| HTTP | code | Description |
+|------|------|-------------|
+| 401 | 1 | Missing/invalid Authorization header or JWT verification failed |
+| 400 | 1 | Request validation failure (for example, missing or empty `msg` field) |
+| 400 | 1 | Request validation failure (for example, invalid `msg` JSON format) |
+| 500 | 1 | One or more images failed to upload to Bilibili |
+| 200 | 1 | Bilibili returned non-zero `code` for dynamic creation (error details are only logged) |
+| 500 | 1 | Failed to parse Bilibili create response |
+| 500 | 1 | Network error or failed to read response (image-flow) |
 
 Note:
-- For Bilibili errors, the server passes Bilibili’s response through in `exception`.
+- These descriptions explain when errors occur, but the actual HTTP response body is always `{ "code": 1 }` for failures.
 
 ## Message Format
 
