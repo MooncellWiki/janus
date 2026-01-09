@@ -203,7 +203,7 @@ The `msg` field must contain a valid JSON array representing the dynamic content
 ### Image Upload Flow
 
 1. Client sends multipart request with text (`msg`) and optional image files
-2. Server validates API key
+2. Server validates JWT authentication (Authorization: Bearer `<token>`)
 3. Server parses and validates the msg content
 4. If images are present:
    - Each image is uploaded individually to Bilibili's BFS (Bilibili File System) via `/x/dynamic/feed/draw/upload_bfs`
