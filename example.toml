@@ -31,7 +31,7 @@ sessdata = "your_bilibili_sessdata_cookie"
 bili_jct = "your_bilibili_bili_jct"
 
 # JWT Configuration (required for API authentication)
-# Generate ES256 key pair in **PKCS#8** format (jsonwebtoken expects this):
+# Generate ES256 key pair (compatible with jsonwebtoken):
 #   openssl ecparam -genkey -name prime256v1 -noout -out private.pem
 # Extract public key:
 #   openssl ec -in private.pem -pubout -out public.pem
