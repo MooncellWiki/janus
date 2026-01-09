@@ -1,3 +1,4 @@
+use anyhow::Context;
 use axum::{
     Json, debug_handler,
     extract::{Multipart, State},
@@ -121,7 +122,9 @@ async fn upload_image(
     let file_part = Part::bytes(file_data)
         .file_name(file_name)
         .mime_str(&content_type)
-        .map_err(|e| AppError::UploadError(format!("Failed to create file part: {}", e)))?;
+        .map_err(|e| {
+            AppError::InternalError(anyhow::Error::new(e).context("Failed to create file part"))
+        })?;
 
     let form = Form::new()
         .part("file_up", file_part)
@@ -135,18 +138,15 @@ async fn upload_image(
         .multipart(form)
         .send()
         .await
-        .map_err(|e| AppError::UploadError(format!("Upload request failed: {}", e)))?;
+        .context("Upload request failed")?;
 
-    let resp_text = resp
-        .text()
-        .await
-        .map_err(|e| AppError::UploadError(format!("Failed to read response: {}", e)))?;
+    let resp_text = resp.text().await.context("Failed to read response")?;
 
-    let upload_resp: BilibiliUploadResponse = serde_json::from_str(&resp_text)
-        .map_err(|e| AppError::UploadError(format!("Failed to parse upload response: {}", e)))?;
+    let upload_resp: BilibiliUploadResponse =
+        serde_json::from_str(&resp_text).context("Failed to parse upload response")?;
 
     if upload_resp.code != 0 {
-        return Err(AppError::UploadError(format!(
+        return Err(AppError::InternalError(anyhow::anyhow!(
             "Bilibili file upload failed, response: {}",
             resp_text
         )));
@@ -154,7 +154,7 @@ async fn upload_image(
 
     let data = upload_resp
         .data
-        .ok_or_else(|| AppError::UploadError("Upload response missing data".to_string()))?;
+        .ok_or_else(|| AppError::InternalError(anyhow::anyhow!("Upload response missing data")))?;
 
     Ok((file_size_kb, data))
 }
@@ -163,22 +163,17 @@ async fn upload_image(
 async fn handle_create_dynamic_response(
     result: Result<reqwest::Response, reqwest::Error>,
 ) -> AppResult<serde_json::Value> {
-    let resp = result
-        .map_err(|e| AppError::NetworkError(format!("Create dynamic request failed: {}", e)))?;
+    let resp = result.context("Create dynamic request failed")?;
 
-    let body = resp
-        .text()
-        .await
-        .map_err(|e| AppError::NetworkError(format!("Read response failed: {}", e)))?;
+    let body = resp.text().await.context("Read response failed")?;
 
     info!("Create dynamic response: {}", body);
 
-    let r: BilibiliCreateResponse = serde_json::from_str(&body).map_err(|e| {
-        AppError::ParseError(format!("Parse create dynamic response failed: {}", e))
-    })?;
+    let r: BilibiliCreateResponse =
+        serde_json::from_str(&body).context("Parse create dynamic response failed")?;
 
     if r.code != 0 {
-        return Err(AppError::InternalError(format!(
+        return Err(AppError::InternalError(anyhow::anyhow!(
             "Bilibili API returned code {}",
             r.code
         )));
@@ -245,11 +240,11 @@ pub async fn create_dynamic(
     // Validate msg
     let msg_content = msg
         .filter(|m| !m.is_empty())
-        .ok_or_else(|| AppError::BadRequest("need msg".to_string()))?;
+        .ok_or_else(|| AppError::BadRequest(anyhow::anyhow!("need msg")))?;
 
     // Parse msg as JSON
-    let contents: serde_json::Value = serde_json::from_str(&msg_content)
-        .map_err(|e| AppError::ParseError(format!("Invalid msg format: {}", e)))?;
+    let contents: serde_json::Value =
+        serde_json::from_str(&msg_content).context("Invalid msg format")?;
 
     // If files are present, upload them first
     if !files.is_empty() {
