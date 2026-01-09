@@ -1,6 +1,7 @@
 pub mod app;
 pub mod auth;
 mod config;
+pub mod error;
 mod middleware;
 mod repository;
 mod routes;

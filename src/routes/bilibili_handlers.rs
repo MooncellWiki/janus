@@ -1,15 +1,15 @@
 use axum::{
     Json, debug_handler,
     extract::{Multipart, State},
-    http::StatusCode,
 };
 use rand::Rng;
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{error, info};
+use tracing::info;
 use utoipa::ToSchema;
 
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 
 /// Response for createDynamic endpoint
@@ -115,13 +115,13 @@ async fn upload_image(
     sessdata: &str,
     bili_jct: &str,
     client: &reqwest::Client,
-) -> Result<(f64, BilibiliUploadData), String> {
+) -> AppResult<(f64, BilibiliUploadData)> {
     let file_size_kb = file_data.len() as f64 / 1024.0;
 
     let file_part = Part::bytes(file_data)
         .file_name(file_name)
         .mime_str(&content_type)
-        .map_err(|e| format!("Failed to create file part: {}", e))?;
+        .map_err(|e| AppError::UploadError(format!("Failed to create file part: {}", e)))?;
 
     let form = Form::new()
         .part("file_up", file_part)
@@ -135,26 +135,26 @@ async fn upload_image(
         .multipart(form)
         .send()
         .await
-        .map_err(|e| format!("Upload request failed: {}", e))?;
+        .map_err(|e| AppError::UploadError(format!("Upload request failed: {}", e)))?;
 
     let resp_text = resp
         .text()
         .await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
+        .map_err(|e| AppError::UploadError(format!("Failed to read response: {}", e)))?;
 
     let upload_resp: BilibiliUploadResponse = serde_json::from_str(&resp_text)
-        .map_err(|e| format!("Failed to parse upload response: {}", e))?;
+        .map_err(|e| AppError::UploadError(format!("Failed to parse upload response: {}", e)))?;
 
     if upload_resp.code != 0 {
-        return Err(format!(
+        return Err(AppError::UploadError(format!(
             "Bilibili file upload failed, response: {}",
             resp_text
-        ));
+        )));
     }
 
     let data = upload_resp
         .data
-        .ok_or_else(|| "Upload response missing data".to_string())?;
+        .ok_or_else(|| AppError::UploadError("Upload response missing data".to_string()))?;
 
     Ok((file_size_kb, data))
 }
@@ -162,79 +162,34 @@ async fn upload_image(
 /// Helper function to handle Bilibili create dynamic response
 async fn handle_create_dynamic_response(
     result: Result<reqwest::Response, reqwest::Error>,
-) -> (StatusCode, Json<DynamicResponse>) {
-    match result {
-        Ok(resp) => match resp.text().await {
-            Ok(body) => {
-                info!("Create dynamic response: {}", body);
-                match serde_json::from_str::<BilibiliCreateResponse>(&body) {
-                    Ok(r) => {
-                        if r.code != 0 {
-                            return (
-                                StatusCode::OK,
-                                Json(DynamicResponse {
-                                    code: 1,
-                                    msg: None,
-                                    data: None,
-                                    exception: Some(serde_json::json!(r)),
-                                }),
-                            );
-                        }
+) -> AppResult<serde_json::Value> {
+    let resp = result
+        .map_err(|e| AppError::NetworkError(format!("Create dynamic request failed: {}", e)))?;
 
-                        // Bilibili sometimes returns `code=0` but `data=null`.
-                        // Treat `code=0` as success and pass through the raw data.
-                        (
-                            StatusCode::OK,
-                            Json(DynamicResponse {
-                                code: 0,
-                                msg: None,
-                                data: r.data.as_ref().map(|d| serde_json::json!(d)),
-                                exception: None,
-                            }),
-                        )
-                    }
-                    Err(e) => {
-                        error!("Parse create dynamic response failed: {}", e);
-                        (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(DynamicResponse {
-                                code: 1,
-                                msg: Some("create dynamic fail".to_string()),
-                                data: None,
-                                exception: Some(
-                                    serde_json::json!({ "body": body, "error": e.to_string() }),
-                                ),
-                            }),
-                        )
-                    }
-                }
-            }
-            Err(e) => {
-                error!("Read response failed: {}", e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(DynamicResponse {
-                        code: 1,
-                        msg: Some("create dynamic fail with network fatal".to_string()),
-                        data: None,
-                        exception: Some(serde_json::json!({ "error": e.to_string() })),
-                    }),
-                )
-            }
-        },
-        Err(e) => {
-            error!("Create dynamic request failed: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(DynamicResponse {
-                    code: 1,
-                    msg: Some("create dynamic fail with network fatal".to_string()),
-                    data: None,
-                    exception: Some(serde_json::json!({ "error": e.to_string() })),
-                }),
-            )
-        }
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| AppError::NetworkError(format!("Read response failed: {}", e)))?;
+
+    info!("Create dynamic response: {}", body);
+
+    let r: BilibiliCreateResponse = serde_json::from_str(&body).map_err(|e| {
+        AppError::ParseError(format!("Parse create dynamic response failed: {}", e))
+    })?;
+
+    if r.code != 0 {
+        return Err(AppError::InternalError(format!(
+            "Bilibili API returned code {}",
+            r.code
+        )));
     }
+
+    // Bilibili sometimes returns `code=0` but `data=null`.
+    // Treat `code=0` as success and pass through the raw data.
+    Ok(r.data
+        .as_ref()
+        .map(|d| serde_json::json!(d))
+        .unwrap_or(serde_json::json!(null)))
 }
 
 /// POST /createDynamic - Create a Bilibili dynamic post with optional images
@@ -256,7 +211,7 @@ async fn handle_create_dynamic_response(
 pub async fn create_dynamic(
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> (StatusCode, Json<DynamicResponse>) {
+) -> AppResult<Json<DynamicResponse>> {
     // Extract Bilibili config
     let bilibili_config = &state.bilibili_config;
 
@@ -288,37 +243,13 @@ pub async fn create_dynamic(
     }
 
     // Validate msg
-    let msg_content = match msg {
-        Some(m) if !m.is_empty() => m,
-        _ => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(DynamicResponse {
-                    code: 1,
-                    msg: Some("need msg".to_string()),
-                    data: None,
-                    exception: None,
-                }),
-            );
-        }
-    };
+    let msg_content = msg
+        .filter(|m| !m.is_empty())
+        .ok_or_else(|| AppError::BadRequest("need msg".to_string()))?;
 
     // Parse msg as JSON
-    let contents: serde_json::Value = match serde_json::from_str(&msg_content) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Failed to parse msg as JSON: {}", e);
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(DynamicResponse {
-                    code: 1,
-                    msg: Some(format!("Invalid msg format: {}", e)),
-                    data: None,
-                    exception: None,
-                }),
-            );
-        }
-    };
+    let contents: serde_json::Value = serde_json::from_str(&msg_content)
+        .map_err(|e| AppError::ParseError(format!("Invalid msg format: {}", e)))?;
 
     // If files are present, upload them first
     if !files.is_empty() {
@@ -326,7 +257,7 @@ pub async fn create_dynamic(
         let mut pics: Vec<PicInfo> = Vec::new();
 
         for (file_data, file_name, content_type) in files {
-            match upload_image(
+            let (size, data) = upload_image(
                 file_data,
                 file_name,
                 content_type,
@@ -334,29 +265,14 @@ pub async fn create_dynamic(
                 &bilibili_config.bili_jct,
                 &state.http_client,
             )
-            .await
-            {
-                Ok((size, data)) => {
-                    pics.push(PicInfo {
-                        img_src: data.image_url,
-                        img_width: data.image_width,
-                        img_height: data.image_height,
-                        img_size: size,
-                    });
-                }
-                Err(e) => {
-                    error!("Upload file failed: {}", e);
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(DynamicResponse {
-                            code: 1,
-                            msg: Some("upload file fail".to_string()),
-                            data: None,
-                            exception: Some(serde_json::json!({ "error": e })),
-                        }),
-                    );
-                }
-            }
+            .await?;
+
+            pics.push(PicInfo {
+                img_src: data.image_url,
+                img_width: data.image_width,
+                img_height: data.image_height,
+                img_size: size,
+            });
         }
 
         // Create dynamic with images (scene 2)
@@ -396,7 +312,13 @@ pub async fn create_dynamic(
             .send()
             .await;
 
-        handle_create_dynamic_response(result).await
+        let data = handle_create_dynamic_response(result).await?;
+        Ok(Json(DynamicResponse {
+            code: 0,
+            msg: None,
+            data: Some(data),
+            exception: None,
+        }))
     } else {
         // Create text-only dynamic (scene 1)
         let upload_id = format!("{}_{}", get_unix_seconds(), get_nonce());
@@ -434,6 +356,12 @@ pub async fn create_dynamic(
             .send()
             .await;
 
-        handle_create_dynamic_response(result).await
+        let data = handle_create_dynamic_response(result).await?;
+        Ok(Json(DynamicResponse {
+            code: 0,
+            msg: None,
+            data: Some(data),
+            exception: None,
+        }))
     }
 }
