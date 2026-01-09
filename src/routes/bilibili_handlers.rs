@@ -214,25 +214,37 @@ pub async fn create_dynamic(
     let mut files: Vec<(Vec<u8>, String, String)> = Vec::new();
 
     // Parse multipart form data
-    while let Ok(Some(field)) = multipart.next_field().await {
-        let field_name = field.name().unwrap_or("").to_string();
+    loop {
+        match multipart.next_field().await {
+            Ok(Some(field)) => {
+                let field_name = field.name().unwrap_or("").to_string();
 
-        match field_name.as_str() {
-            "msg" => {
-                msg = field.text().await.ok();
-            }
-            _ => {
-                // Assume it's a file upload
-                if let Some(file_name) = field.file_name() {
-                    let file_name = file_name.to_string();
-                    let content_type = field
-                        .content_type()
-                        .unwrap_or("application/octet-stream")
-                        .to_string();
-                    if let Ok(data) = field.bytes().await {
-                        files.push((data.to_vec(), file_name, content_type));
+                match field_name.as_str() {
+                    "msg" => {
+                        msg = field.text().await.ok();
+                    }
+                    _ => {
+                        // Assume it's a file upload
+                        if let Some(file_name) = field.file_name() {
+                            let file_name = file_name.to_string();
+                            let content_type = field
+                                .content_type()
+                                .unwrap_or("application/octet-stream")
+                                .to_string();
+                            if let Ok(data) = field.bytes().await {
+                                files.push((data.to_vec(), file_name, content_type));
+                            }
+                        }
                     }
                 }
+            }
+            Ok(None) => {
+                // End of multipart fields
+                break;
+            }
+            Err(e) => {
+                info!("Error reading multipart field: {}", e);
+                break;
             }
         }
     }
