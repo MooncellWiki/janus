@@ -281,7 +281,6 @@ A few details are intentionally aligned with (or differ from) the original refer
 ## Troubleshooting
 
 ### JWT Token Issues
-- Verify your token is not expired
 - Ensure the token is passed in the `Authorization: Bearer <token>` header format
 - Check that the public/private key pair in config matches the keys used to generate the token
 - Regenerate token using the CLI command if needed
