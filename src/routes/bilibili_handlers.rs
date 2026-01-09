@@ -187,6 +187,64 @@ async fn handle_create_dynamic_response(
         .unwrap_or(serde_json::json!(null)))
 }
 
+/// Helper function to create dynamic with specified scene and optional pics
+async fn create_dynamic_with_scene(
+    contents: serde_json::Value,
+    scene: i32,
+    pics: Option<Vec<PicInfo>>,
+    sessdata: &str,
+    bili_jct: &str,
+    client: &reqwest::Client,
+) -> AppResult<Json<DynamicResponse>> {
+    let upload_id = format!("{}_{}", get_unix_seconds(), get_nonce());
+
+    let mut dyn_req_content = serde_json::json!({
+        "dyn_req": {
+            "content": {
+                "contents": contents
+            },
+            "scene": scene,
+            "attach_card": null,
+            "upload_id": upload_id,
+            "meta": {
+                "app_meta": {
+                    "from": "create.dynamic.web",
+                    "mobi_app": "web"
+                }
+            }
+        }
+    });
+
+    // Add pics field if provided
+    if let Some(pics) = pics {
+        dyn_req_content["dyn_req"]["pics"] = serde_json::to_value(pics)
+            .context("Failed to serialize pics")?;
+    }
+
+    let mut headers = create_headers(sessdata);
+    headers.insert("Content-Type", "application/json".parse().unwrap());
+
+    let url = format!(
+        "https://api.bilibili.com/x/dynamic/feed/create/dyn?platform=web&csrf={}",
+        bili_jct
+    );
+
+    let result = client
+        .post(&url)
+        .headers(headers)
+        .body(dyn_req_content.to_string())
+        .send()
+        .await;
+
+    let data = handle_create_dynamic_response(result).await?;
+    Ok(Json(DynamicResponse {
+        code: 0,
+        msg: None,
+        data: Some(data),
+        exception: None,
+    }))
+}
+
 /// POST /createDynamic - Create a Bilibili dynamic post with optional images
 #[debug_handler]
 #[utoipa::path(
@@ -283,92 +341,25 @@ pub async fn create_dynamic(
         }
 
         // Create dynamic with images (scene 2)
-        let upload_id = format!("{}_{}", get_unix_seconds(), get_nonce());
-
-        let dyn_req = serde_json::json!({
-            "dyn_req": {
-                "content": {
-                    "contents": contents
-                },
-                "scene": 2,
-                "attach_card": null,
-                "upload_id": upload_id,
-                "meta": {
-                    "app_meta": {
-                        "from": "create.dynamic.web",
-                        "mobi_app": "web"
-                    }
-                },
-                "pics": pics
-            }
-        });
-
-        let mut headers = create_headers(&bilibili_config.sessdata);
-        headers.insert("Content-Type", "application/json".parse().unwrap());
-
-        let url = format!(
-            "https://api.bilibili.com/x/dynamic/feed/create/dyn?platform=web&csrf={}",
-            bilibili_config.bili_jct
-        );
-
-        let result = state
-            .http_client
-            .post(&url)
-            .headers(headers)
-            .body(dyn_req.to_string())
-            .send()
-            .await;
-
-        let data = handle_create_dynamic_response(result).await?;
-        Ok(Json(DynamicResponse {
-            code: 0,
-            msg: None,
-            data: Some(data),
-            exception: None,
-        }))
+        create_dynamic_with_scene(
+            contents,
+            2,
+            Some(pics),
+            &bilibili_config.sessdata,
+            &bilibili_config.bili_jct,
+            &state.http_client,
+        )
+        .await
     } else {
         // Create text-only dynamic (scene 1)
-        let upload_id = format!("{}_{}", get_unix_seconds(), get_nonce());
-
-        let dyn_req = serde_json::json!({
-            "dyn_req": {
-                "content": {
-                    "contents": contents
-                },
-                "scene": 1,
-                "attach_card": null,
-                "upload_id": upload_id,
-                "meta": {
-                    "app_meta": {
-                        "from": "create.dynamic.web",
-                        "mobi_app": "web"
-                    }
-                }
-            }
-        });
-
-        let mut headers = create_headers(&bilibili_config.sessdata);
-        headers.insert("Content-Type", "application/json".parse().unwrap());
-
-        let url = format!(
-            "https://api.bilibili.com/x/dynamic/feed/create/dyn?platform=web&csrf={}",
-            bilibili_config.bili_jct
-        );
-
-        let result = state
-            .http_client
-            .post(&url)
-            .headers(headers)
-            .body(dyn_req.to_string())
-            .send()
-            .await;
-
-        let data = handle_create_dynamic_response(result).await?;
-        Ok(Json(DynamicResponse {
-            code: 0,
-            msg: None,
-            data: Some(data),
-            exception: None,
-        }))
+        create_dynamic_with_scene(
+            contents,
+            1,
+            None,
+            &bilibili_config.sessdata,
+            &bilibili_config.bili_jct,
+            &state.http_client,
+        )
+        .await
     }
 }
