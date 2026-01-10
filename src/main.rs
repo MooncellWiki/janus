@@ -1,7 +1,7 @@
 // CLI main entry point
 use anyhow::Result;
-use mimalloc::MiMalloc;
 use janus::app::run;
+use mimalloc::MiMalloc;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

@@ -75,9 +75,7 @@ pub async fn jwt_auth_middleware(
     let auth_header = request
         .headers()
         .get("Authorization")
-        .ok_or_else(|| {
-            AppError::Unauthorized(anyhow::anyhow!("Missing authorization header"))
-        })?
+        .ok_or_else(|| AppError::Unauthorized(anyhow::anyhow!("Missing authorization header")))?
         .to_str()
         .map_err(|_| {
             AppError::Unauthorized(anyhow::anyhow!("Invalid authorization header format"))
