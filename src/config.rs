@@ -111,6 +111,22 @@ pub struct JwtConfig {
     pub public_key: String,
 }
 
+/// Alibaba Cloud configuration for API access
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AliyunConfig {
+    /// Alibaba Cloud Access Key ID
+    pub access_key_id: String,
+    /// Alibaba Cloud Access Key Secret
+    pub access_key_secret: String,
+    /// CDN API endpoint region (e.g., "cdn.aliyuncs.com")
+    #[serde(default = "default_cdn_endpoint")]
+    pub cdn_endpoint: String,
+}
+
+fn default_cdn_endpoint() -> String {
+    "cdn.aliyuncs.com".to_string()
+}
+
 /// Server configuration for application use
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServerConfig {
@@ -145,6 +161,7 @@ pub struct AppSettings {
     pub sentry: Option<SentryConfig>,
     pub bilibili: BilibiliConfig,
     pub jwt: JwtConfig,
+    pub aliyun: Option<AliyunConfig>,
 }
 
 impl AppSettings {

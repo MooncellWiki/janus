@@ -43,6 +43,12 @@ public_key = """-----BEGIN PUBLIC KEY-----
 YOUR_PUBLIC_KEY_HERE
 -----END PUBLIC KEY-----"""
 
+# Alibaba Cloud Configuration (optional, for CDN API access)
+# [aliyun]
+# access_key_id = "your_access_key_id"
+# access_key_secret = "your_access_key_secret"
+# cdn_endpoint = "cdn.aliyuncs.com"  # Optional, defaults to "cdn.aliyuncs.com"
+
 # [sentry]
 # dsn = ""
 # traces_sample_rate = 1.0
