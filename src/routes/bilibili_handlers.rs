@@ -190,7 +190,6 @@ async fn handle_create_dynamic_response(
 /// Helper function to create dynamic with specified scene and optional pics
 async fn create_dynamic_with_scene(
     contents: serde_json::Value,
-    scene: i32,
     pics: Option<Vec<PicInfo>>,
     sessdata: &str,
     bili_jct: &str,
@@ -203,7 +202,7 @@ async fn create_dynamic_with_scene(
             "content": {
                 "contents": contents
             },
-            "scene": scene,
+            "scene": if pics.is_some() {2} else {1},
             "attach_card": null,
             "upload_id": upload_id,
             "meta": {
@@ -217,8 +216,8 @@ async fn create_dynamic_with_scene(
 
     // Add pics field if provided
     if let Some(pics) = pics {
-        dyn_req_content["dyn_req"]["pics"] = serde_json::to_value(pics)
-            .context("Failed to serialize pics")?;
+        dyn_req_content["dyn_req"]["pics"] =
+            serde_json::to_value(pics).context("Failed to serialize pics")?;
     }
 
     let mut headers = create_headers(sessdata);
@@ -245,12 +244,18 @@ async fn create_dynamic_with_scene(
     }))
 }
 
-/// POST /createDynamic - Create a Bilibili dynamic post with optional images
+/// Create a Bilibili dynamic post with optional images
 #[debug_handler]
 #[utoipa::path(
     post,
-    path = "/createDynamic",
-    request_body(content_type = "multipart/form-data"),
+    tag = "bilibili",
+    path = "/bilibili/createDynamic",
+    request_body(content_type = "multipart/form-data",
+    description = "
+- **msg** (required, string): JSON value that will be sent to Bilibili as `dyn_req.content.contents`. For example: `[{\"type\":1,\"raw_text\":\"Hello from Rust API!\",\"biz_id\":\"\"}]`.
+- **file(s)** (optional): Any multipart field *with a filename* is treated as an uploaded image. The server does not require a specific field name like `files`, `image`, etc."
+    ),
+
     responses(
         (status = OK, body = DynamicResponse),
         (status = UNAUTHORIZED, body = DynamicResponse),
@@ -343,7 +348,6 @@ pub async fn create_dynamic(
         // Create dynamic with images (scene 2)
         create_dynamic_with_scene(
             contents,
-            2,
             Some(pics),
             &bilibili_config.sessdata,
             &bilibili_config.bili_jct,
@@ -354,7 +358,6 @@ pub async fn create_dynamic(
         // Create text-only dynamic (scene 1)
         create_dynamic_with_scene(
             contents,
-            1,
             None,
             &bilibili_config.sessdata,
             &bilibili_config.bili_jct,

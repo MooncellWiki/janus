@@ -10,14 +10,14 @@ pub struct Health {
 
 /// /_ping
 #[debug_handler]
-#[utoipa::path(get, path = "/_ping", responses((status = OK, body = Health)))]
+#[utoipa::path(get, path = "/_ping", tag = "health", responses((status = OK, body = Health)))]
 pub async fn ping() -> Json<Health> {
     Json(Health { ok: true })
 }
 
 /// /_health
 #[debug_handler]
-#[utoipa::path(get, path = "/_health", responses((status = OK, body = Health)))]
+#[utoipa::path(get, path = "/_health", tag = "health", responses((status = OK, body = Health)))]
 pub async fn health(State(state): State<AppState>) -> AppResult<Json<Health>> {
     Ok(Json(Health {
         ok: state.repository.health_check().await,

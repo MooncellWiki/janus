@@ -4,7 +4,7 @@ This document describes the Bilibili dynamic posting functionality implemented i
 
 ## Overview
 
-The `POST /api/createDynamic` endpoint posts text and optional images to Bilibili as a dynamic.
+The `POST /api/bilibili/createDynamic` endpoint posts text and optional images to Bilibili as a dynamic.
 
 - **Authentication:** Required. The route is protected by JWT middleware and expects `Authorization: Bearer <token>`.
 - **Implementation:** Axum multipart parsing + `reqwest` calls to Bilibili’s web APIs.
@@ -69,7 +69,7 @@ Notes:
 
 ## API Endpoint
 
-### POST `/api/createDynamic`
+### POST `/api/bilibili/createDynamic`
 
 Creates a new Bilibili dynamic post with optional images.
 
@@ -91,7 +91,7 @@ Creates a new Bilibili dynamic post with optional images.
 **Text-only dynamic:**
 
 ```bash
-curl -X POST http://localhost:25150/api/createDynamic \
+curl -X POST http://localhost:25150/api/bilibili/createDynamic \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F 'msg=[{"type":1,"raw_text":"Hello from Rust API!","biz_id":""}]'
 ```
@@ -99,7 +99,7 @@ curl -X POST http://localhost:25150/api/createDynamic \
 **Dynamic with a single image:**
 
 ```bash
-curl -X POST http://localhost:25150/api/createDynamic \
+curl -X POST http://localhost:25150/api/bilibili/createDynamic \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F 'msg=[{"type":1,"raw_text":"Check out this image!","biz_id":""}]' \
   -F "image=@photo.jpg"
@@ -108,7 +108,7 @@ curl -X POST http://localhost:25150/api/createDynamic \
 **Dynamic with multiple images:**
 
 ```bash
-curl -X POST http://localhost:25150/api/createDynamic \
+curl -X POST http://localhost:25150/api/bilibili/createDynamic \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F 'msg=[{"type":1,"raw_text":"My photo gallery","biz_id":""}]' \
   -F "image1=@photo1.jpg" \
@@ -320,7 +320,7 @@ async function postToBilibili(text: string, jwtToken: string, images?: File[]) {
     });
   }
   
-  const response = await fetch('http://localhost:25150/api/createDynamic', {
+  const response = await fetch('http://localhost:25150/api/bilibili/createDynamic', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${jwtToken}`
@@ -338,7 +338,7 @@ async function postToBilibili(text: string, jwtToken: string, images?: File[]) {
 import requests
 
 def post_to_bilibili(text, jwt_token, images=None):
-    url = 'http://localhost:25150/api/createDynamic'
+    url = 'http://localhost:25150/api/bilibili/createDynamic'
     
     headers = {
         'Authorization': f'Bearer {jwt_token}'

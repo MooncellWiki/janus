@@ -1,7 +1,7 @@
 // CLI main entry point
 use anyhow::Result;
 use mimalloc::MiMalloc;
-use my_axum_template::app::run;
+use janus::app::run;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
