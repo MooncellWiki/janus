@@ -5,6 +5,7 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 use crate::{
+    auth::generate_token,
     config::AppSettings,
     repository::Repository,
     routes::build_router,
@@ -21,6 +22,14 @@ pub enum Commands {
     Server {
         #[arg(short, long, default_value = "config.toml")]
         config: String,
+    },
+    /// Generate a JWT token
+    GenerateJwt {
+        #[arg(short, long, default_value = "config.toml")]
+        config: String,
+        /// Subject for the JWT (e.g., user ID or identifier)
+        #[arg(short, long)]
+        subject: String,
     },
     /// Show version information
     Version,
@@ -50,6 +59,16 @@ pub async fn run() -> Result<()> {
             init_tracing(&config.logger);
             let _sentry_guard = &config.sentry.as_ref().map(init_sentry);
             start(&config).await?;
+            Ok(())
+        }
+        Commands::GenerateJwt { config, subject } => {
+            let config = AppSettings::new(Path::new(&config))?;
+
+            let token = generate_token(subject.clone(), &config.jwt.private_key)?;
+
+            println!("Generated JWT token for subject '{}':", subject);
+            println!("{}", token);
+
             Ok(())
         }
         Commands::Version => {

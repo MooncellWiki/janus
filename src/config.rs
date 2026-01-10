@@ -93,6 +93,24 @@ pub struct SentryConfig {
     pub traces_sample_rate: f32,
 }
 
+/// Bilibili configuration for dynamic posting
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BilibiliConfig {
+    /// Bilibili SESSDATA cookie value
+    pub sessdata: String,
+    /// Bilibili CSRF token
+    pub bili_jct: String,
+}
+
+/// JWT configuration for authentication
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct JwtConfig {
+    /// ES256 private key in PEM format
+    pub private_key: String,
+    /// ES256 public key in PEM format
+    pub public_key: String,
+}
+
 /// Server configuration for application use
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServerConfig {
@@ -125,6 +143,8 @@ pub struct AppSettings {
     pub database: DatabaseConfig,
     pub mailer: Option<SmtpConfig>,
     pub sentry: Option<SentryConfig>,
+    pub bilibili: BilibiliConfig,
+    pub jwt: JwtConfig,
 }
 
 impl AppSettings {
