@@ -1,7 +1,8 @@
 #![allow(clippy::needless_for_each)]
+mod bilibili_handlers;
 mod misc_handlers;
-use crate::{middleware::apply_axum_middleware, state::AppState};
-use axum::{Json, Router, routing::get};
+use crate::{auth::jwt_auth_middleware, middleware::apply_axum_middleware, state::AppState};
+use axum::{Json, Router, middleware, routing::get};
 use utoipa::OpenApi;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use utoipa_scalar::{Scalar, Servable};
@@ -10,27 +11,57 @@ use utoipa_scalar::{Scalar, Servable};
 #[openapi(
     tags(
         (name = "health", description = "Health check endpoints"),
+        (name = "bilibili", description = "Bilibili dynamic posting endpoints"),
     ),
+    components(
+        schemas(bilibili_handlers::DynamicResponse)
+    ),
+    modifiers(&SecurityAddon)
 )]
 pub struct ApiDoc;
 
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearer_auth",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::HttpBuilder::new()
+                        .scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .build(),
+                ),
+            )
+        }
+    }
+}
+
 pub fn build_router(state: AppState) -> Router {
     let (api_routes, mut openapi) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        // Health endpoints
+        // Health endpoints (no auth required)
         .routes(routes!(misc_handlers::ping))
         .routes(routes!(misc_handlers::health))
+        // Apply JWT authentication for subsequent routes
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            jwt_auth_middleware,
+        ))
+        // Bilibili routes (protected by JWT auth)
+        .routes(routes!(bilibili_handlers::create_dynamic))
         .split_for_parts();
 
     openapi.paths.paths = openapi
         .paths
         .paths
         .into_iter()
-        .map(|(path, item)| (format!("/api/v1{path}"), item))
+        .map(|(path, item)| (format!("/api{path}"), item))
         .collect::<utoipa::openapi::path::PathsMap<_, _>>();
     let full_router = Router::new()
-        .nest("/api/v1", api_routes)
-        .merge(Scalar::with_url("/api/v1/scalar", openapi.clone()))
-        .route("/api/v1/openapi.json", get(|| async move { Json(openapi) }))
+        .nest("/api", api_routes)
+        .merge(Scalar::with_url("/api/scalar", openapi.clone()))
+        .route("/api/openapi.json", get(|| async move { Json(openapi) }))
         .with_state(state);
 
     // Apply middleware
