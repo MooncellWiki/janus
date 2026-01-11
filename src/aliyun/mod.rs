@@ -1,5 +1,5 @@
-mod signature;
 pub mod cdn;
+mod signature;
 
-pub use signature::AliyunSigner;
 pub use cdn::{AliyunCdnClient, DescribeRefreshTasksRequest, DescribeRefreshTasksResponse};
+pub use signature::AliyunSigner;

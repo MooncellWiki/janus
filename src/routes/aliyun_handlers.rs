@@ -12,35 +12,35 @@ pub struct DescribeRefreshTasksPayload {
     /// Task ID for querying specific task
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
-    
+
     /// Object path for filtering tasks
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_path: Option<String>,
-    
+
     /// Page number (starting from 1)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_number: Option<i32>,
-    
+
     /// Page size (default 20, max 100)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_size: Option<i32>,
-    
+
     /// Task type filter: "file" or "directory"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_type: Option<String>,
-    
+
     /// Domain name filter
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain_name: Option<String>,
-    
+
     /// Status filter: "Complete", "Refreshing", "Failed"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
-    
+
     /// Start time (ISO 8601 format)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start_time: Option<String>,
-    
+
     /// End time (ISO 8601 format)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub end_time: Option<String>,

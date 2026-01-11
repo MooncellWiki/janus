@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::BTreeMap;
 
 /// Aliyun API V3 signature generator
-/// 
+///
 /// Implements the Aliyun API signature V3 algorithm as documented at:
 /// https://help.aliyun.com/zh/sdk/product-overview/v3-request-structure-and-signature
 pub struct AliyunSigner {
@@ -43,11 +43,11 @@ impl AliyunSigner {
     }
 
     /// Sign a request with Aliyun V3 signature algorithm
-    /// 
+    ///
     /// # Arguments
     /// * `method` - HTTP method (GET, POST, etc.)
     /// * `params` - Request parameters (will be sorted)
-    /// 
+    ///
     /// # Returns
     /// A tuple of (signed_params, headers) where:
     /// - signed_params: Complete parameters including signature and common params
@@ -94,15 +94,15 @@ impl AliyunSigner {
 
     /// Calculate HMAC-SHA256 signature
     fn calculate_signature(&self, string_to_sign: &str) -> String {
-        use hmac::{Hmac, Mac};
         use base64::Engine;
+        use hmac::{Hmac, Mac};
         type HmacSha256 = Hmac<Sha256>;
 
         // Key is AccessKeySecret + "&"
         let key = format!("{}&", self.access_key_secret);
 
-        let mut mac = HmacSha256::new_from_slice(key.as_bytes())
-            .expect("HMAC can take key of any size");
+        let mut mac =
+            HmacSha256::new_from_slice(key.as_bytes()).expect("HMAC can take key of any size");
         mac.update(string_to_sign.as_bytes());
 
         // Get result and convert to base64
@@ -112,7 +112,7 @@ impl AliyunSigner {
 }
 
 /// Percent encode a string according to RFC 3986
-/// 
+///
 /// This encodes all characters except: A-Z, a-z, 0-9, -, _, ., ~
 fn percent_encode(input: &str) -> String {
     input

@@ -11,42 +11,42 @@ use super::signature::AliyunSigner;
 const CDN_ENDPOINT: &str = "https://cdn.aliyuncs.com";
 
 /// Request parameters for DescribeRefreshTasks API
-/// 
+///
 /// Reference: https://help.aliyun.com/zh/cdn/developer-reference/api-cdn-2018-05-10-describerefreshtasks
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DescribeRefreshTasksRequest {
     /// Task ID for querying specific task
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
-    
+
     /// Object path for filtering tasks
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_path: Option<String>,
-    
+
     /// Page number (starting from 1)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_number: Option<i32>,
-    
+
     /// Page size (default 20, max 100)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_size: Option<i32>,
-    
+
     /// Task type filter: "file" or "directory"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_type: Option<String>,
-    
+
     /// Domain name filter
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain_name: Option<String>,
-    
+
     /// Status filter: "Complete", "Refreshing", "Failed"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
-    
+
     /// Start time (ISO 8601 format)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start_time: Option<String>,
-    
+
     /// End time (ISO 8601 format)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub end_time: Option<String>,
@@ -57,16 +57,16 @@ pub struct DescribeRefreshTasksRequest {
 pub struct DescribeRefreshTasksResponse {
     #[serde(rename = "RequestId")]
     pub request_id: String,
-    
+
     #[serde(rename = "PageNumber")]
     pub page_number: i64,
-    
+
     #[serde(rename = "PageSize")]
     pub page_size: i64,
-    
+
     #[serde(rename = "TotalCount")]
     pub total_count: i64,
-    
+
     #[serde(rename = "Tasks")]
     pub tasks: TasksContainer,
 }
@@ -81,22 +81,22 @@ pub struct TasksContainer {
 pub struct RefreshTask {
     #[serde(rename = "TaskId")]
     pub task_id: String,
-    
+
     #[serde(rename = "ObjectPath")]
     pub object_path: String,
-    
+
     #[serde(rename = "ObjectType")]
     pub object_type: String,
-    
+
     #[serde(rename = "Status")]
     pub status: String,
-    
+
     #[serde(rename = "Process")]
     pub process: String,
-    
+
     #[serde(rename = "CreationTime")]
     pub creation_time: String,
-    
+
     #[serde(rename = "Description", skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
@@ -114,15 +114,15 @@ impl AliyunCdnClient {
             config.access_key_id.clone(),
             config.access_key_secret.clone(),
         );
-        
+
         Self { signer, client }
     }
 
     /// Call DescribeRefreshTasks API
-    /// 
+    ///
     /// # Arguments
     /// * `request` - Request parameters
-    /// 
+    ///
     /// # Returns
     /// Response containing refresh task information
     pub async fn describe_refresh_tasks(
@@ -200,8 +200,8 @@ impl AliyunCdnClient {
         }
 
         // Parse JSON response
-        let result: DescribeRefreshTasksResponse = serde_json::from_str(&body)
-            .context("Failed to parse DescribeRefreshTasks response")?;
+        let result: DescribeRefreshTasksResponse =
+            serde_json::from_str(&body).context("Failed to parse DescribeRefreshTasks response")?;
 
         Ok(result)
     }
