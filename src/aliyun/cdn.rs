@@ -166,10 +166,10 @@ impl AliyunCdnClient {
         // Sign the request
         let (signed_params, headers) = self.signer.sign_request("GET", params);
 
-        // Build query string
+        // Build query string (parameters already encoded during signing)
         let query_string = signed_params
             .iter()
-            .map(|(k, v)| format!("{}={}", k, urlencoding::encode(v)))
+            .map(|(k, v)| format!("{}={}", k, v))
             .collect::<Vec<_>>()
             .join("&");
 
