@@ -1,3 +1,4 @@
+pub mod aliyun;
 pub mod app;
 pub mod auth;
 mod config;
