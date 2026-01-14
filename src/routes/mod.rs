@@ -19,7 +19,9 @@ use utoipa_scalar::{Scalar, Servable};
         schemas(
             bilibili_handlers::DynamicResponse,
             aliyun_handlers::DescribeRefreshTasksPayload,
+            aliyun_handlers::RefreshObjectCachesPayload,
             crate::aliyun::DescribeRefreshTasksResponse,
+            crate::aliyun::RefreshObjectCachesResponse,
             crate::aliyun::cdn::TasksContainer,
             crate::aliyun::cdn::RefreshTask,
         )
@@ -60,6 +62,7 @@ pub fn build_router(state: AppState) -> Router {
         .routes(routes!(bilibili_handlers::create_dynamic))
         // Aliyun routes (protected by JWT auth)
         .routes(routes!(aliyun_handlers::describe_refresh_tasks))
+        .routes(routes!(aliyun_handlers::refresh_object_caches))
         .split_for_parts();
 
     openapi.paths.paths = openapi

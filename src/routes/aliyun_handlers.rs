@@ -2,7 +2,10 @@ use axum::{Json, extract::State};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::aliyun::{AliyunCdnClient, DescribeRefreshTasksRequest, DescribeRefreshTasksResponse};
+use crate::aliyun::{
+    AliyunCdnClient, DescribeRefreshTasksRequest, DescribeRefreshTasksResponse,
+    RefreshObjectCachesRequest, RefreshObjectCachesResponse,
+};
 use crate::error::AppResult;
 use crate::state::AppState;
 
@@ -84,6 +87,57 @@ pub async fn describe_refresh_tasks(
 
     // Call API
     let response = client.describe_refresh_tasks(&request).await?;
+
+    Ok(Json(response))
+}
+
+/// Request payload for refresh object caches endpoint
+#[derive(ToSchema, Serialize, Deserialize, Debug)]
+pub struct RefreshObjectCachesPayload {
+    /// Object paths to refresh (separated by newlines, max 1000 URLs or 100 directories per request)
+    pub object_path: String,
+
+    /// Object type: "File" for file refresh, "Directory" for directory refresh
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_type: Option<String>,
+
+    /// Refresh area: "domestic" or "overseas"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub area: Option<String>,
+}
+
+/// Refresh Aliyun CDN object caches
+#[utoipa::path(
+    post,
+    tag = "aliyun",
+    path = "/aliyun/refreshObjectCaches",
+    request_body = RefreshObjectCachesPayload,
+    responses(
+        (status = OK, description = "Successfully submitted refresh task", body = RefreshObjectCachesResponse),
+        (status = UNAUTHORIZED, description = "Unauthorized"),
+        (status = BAD_REQUEST, description = "Invalid request parameters"),
+        (status = INTERNAL_SERVER_ERROR, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn refresh_object_caches(
+    State(state): State<AppState>,
+    Json(payload): Json<RefreshObjectCachesPayload>,
+) -> AppResult<Json<RefreshObjectCachesResponse>> {
+    // Create Aliyun CDN client
+    let client = AliyunCdnClient::new(&state.aliyun_config, state.http_client.clone());
+
+    // Build request
+    let request = RefreshObjectCachesRequest {
+        object_path: payload.object_path,
+        object_type: payload.object_type,
+        area: payload.area,
+    };
+
+    // Call API
+    let response = client.refresh_object_caches(&request).await?;
 
     Ok(Json(response))
 }

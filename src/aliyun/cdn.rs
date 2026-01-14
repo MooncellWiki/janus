@@ -102,6 +102,33 @@ pub struct RefreshTask {
     pub description: Option<String>,
 }
 
+/// Request parameters for RefreshObjectCaches API
+///
+/// Reference: https://help.aliyun.com/zh/cdn/developer-reference/api-cdn-2018-05-10-refreshobjectcaches
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RefreshObjectCachesRequest {
+    /// Object paths to refresh (separated by newlines, max 1000 URLs or 100 directories per request)
+    pub object_path: String,
+
+    /// Object type: "File" for file refresh, "Directory" for directory refresh
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_type: Option<String>,
+
+    /// Whether to force refresh: "domestic" or "overseas"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub area: Option<String>,
+}
+
+/// Response from RefreshObjectCaches API
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RefreshObjectCachesResponse {
+    #[serde(rename = "RequestId")]
+    pub request_id: String,
+
+    #[serde(rename = "RefreshTaskId")]
+    pub refresh_task_id: String,
+}
+
 /// Aliyun CDN API client
 pub struct AliyunCdnClient {
     signer: AliyunSigner,
@@ -213,6 +240,84 @@ impl AliyunCdnClient {
         // Parse JSON response
         let result: DescribeRefreshTasksResponse =
             serde_json::from_str(&body).context("Failed to parse DescribeRefreshTasks response")?;
+
+        Ok(result)
+    }
+
+    /// Call RefreshObjectCaches API
+    ///
+    /// # Arguments
+    /// * `request` - Request parameters
+    ///
+    /// # Returns
+    /// Response containing refresh task ID
+    pub async fn refresh_object_caches(
+        &self,
+        request: &RefreshObjectCachesRequest,
+    ) -> AppResult<RefreshObjectCachesResponse> {
+        // Build query parameters
+        let mut params = BTreeMap::new();
+        params.insert("ObjectPath".to_string(), request.object_path.clone());
+
+        if let Some(ref object_type) = request.object_type {
+            params.insert("ObjectType".to_string(), object_type.clone());
+        }
+        if let Some(ref area) = request.area {
+            params.insert("Area".to_string(), area.clone());
+        }
+
+        // Sign the request (ACS3-HMAC-SHA256)
+        let signed = self
+            .signer
+            .sign_request(AliyunSignInput {
+                method: "POST",
+                host: CDN_HOST,
+                canonical_uri: "/",
+                action: "RefreshObjectCaches",
+                version: "2018-05-10",
+                query_params: params,
+                body: b"",
+                content_type: Some("application/x-www-form-urlencoded"),
+                extra_headers: BTreeMap::new(),
+            })
+            .context("Failed to sign Aliyun request")?;
+
+        let query_string = signed.query_string;
+        let headers = signed.headers;
+
+        let url = if query_string.is_empty() {
+            format!("{}/", CDN_ENDPOINT)
+        } else {
+            format!("{}/?{}", CDN_ENDPOINT, query_string)
+        };
+
+        // Send request
+        let response = self
+            .client
+            .post(&url)
+            .headers(headers)
+            .send()
+            .await
+            .context("Failed to send RefreshObjectCaches request")?;
+
+        // Parse response
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .context("Failed to read response body")?;
+
+        if !status.is_success() {
+            return Err(AppError::InternalError(anyhow::anyhow!(
+                "Aliyun API error (status {}): {}",
+                status,
+                body
+            )));
+        }
+
+        // Parse JSON response
+        let result: RefreshObjectCachesResponse =
+            serde_json::from_str(&body).context("Failed to parse RefreshObjectCaches response")?;
 
         Ok(result)
     }
