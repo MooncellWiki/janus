@@ -9,6 +9,7 @@ use super::signature::AliyunSigner;
 
 /// CDN API endpoint
 const CDN_ENDPOINT: &str = "https://cdn.aliyuncs.com";
+const CDN_HOST: &str = "cdn.aliyuncs.com";
 
 /// Request parameters for DescribeRefreshTasks API
 ///
@@ -73,8 +74,8 @@ pub struct DescribeRefreshTasksResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TasksContainer {
-    #[serde(rename = "Task")]
-    pub task: Vec<RefreshTask>,
+    #[serde(rename = "CDNTask")]
+    pub cdn_tasks: Vec<RefreshTask>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -129,10 +130,8 @@ impl AliyunCdnClient {
         &self,
         request: &DescribeRefreshTasksRequest,
     ) -> AppResult<DescribeRefreshTasksResponse> {
-        // Build parameters
+        // Build query parameters (V3: Action/Version are sent as x-acs-* headers)
         let mut params = BTreeMap::new();
-        params.insert("Action".to_string(), "DescribeRefreshTasks".to_string());
-        params.insert("Version".to_string(), "2018-05-10".to_string());
 
         // Add optional parameters
         if let Some(ref task_id) = request.task_id {
@@ -163,17 +162,23 @@ impl AliyunCdnClient {
             params.insert("EndTime".to_string(), end_time.clone());
         }
 
-        // Sign the request
-        let (signed_params, headers) = self.signer.sign_request("GET", params);
+        // Sign the request (ACS3-HMAC-SHA256)
+        let (query_string, headers) = self.signer.sign_request(
+            "GET",
+            CDN_HOST,
+            "/",
+            "DescribeRefreshTasks",
+            "2018-05-10",
+            params,
+            b"",
+            None,
+        );
 
-        // Build query string (parameters already encoded during signing)
-        let query_string = signed_params
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect::<Vec<_>>()
-            .join("&");
-
-        let url = format!("{}/?{}", CDN_ENDPOINT, query_string);
+        let url = if query_string.is_empty() {
+            format!("{}/", CDN_ENDPOINT)
+        } else {
+            format!("{}/?{}", CDN_ENDPOINT, query_string)
+        };
 
         // Send request
         let response = self
@@ -198,7 +203,6 @@ impl AliyunCdnClient {
                 body
             )));
         }
-
         // Parse JSON response
         let result: DescribeRefreshTasksResponse =
             serde_json::from_str(&body).context("Failed to parse DescribeRefreshTasks response")?;

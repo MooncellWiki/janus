@@ -1,19 +1,17 @@
 use chrono::Utc;
-use rand::Rng;
-use sha2::Sha256;
+use rand::RngCore;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-/// Aliyun API V3 signature generator
+/// Aliyun OpenAPI V3 signature generator (ACS3-HMAC-SHA256)
 ///
-/// Implements the Aliyun API signature V3 algorithm as documented at:
-/// https://help.aliyun.com/zh/sdk/product-overview/v3-request-structure-and-signature
+/// Docs: https://help.aliyun.com/zh/sdk/product-overview/v3-request-structure-and-signature
 pub struct AliyunSigner {
     access_key_id: String,
     access_key_secret: String,
 }
 
 impl AliyunSigner {
-    /// Create a new AliyunSigner with credentials
     pub fn new(access_key_id: String, access_key_secret: String) -> Self {
         Self {
             access_key_id,
@@ -21,11 +19,11 @@ impl AliyunSigner {
         }
     }
 
-    /// Generate a random nonce for request
+    /// Generate a random nonce (hex string) for request.
     fn generate_nonce() -> String {
-        let mut rng = rand::thread_rng();
-        let nonce: u64 = rng.r#gen();
-        nonce.to_string()
+        let mut bytes = [0u8; 16];
+        rand::thread_rng().fill_bytes(&mut bytes);
+        hex_encode_lower(&bytes)
     }
 
     /// Get current timestamp in ISO 8601 format (UTC)
@@ -33,7 +31,6 @@ impl AliyunSigner {
         Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
     }
 
-    /// Build canonical query string from parameters (sorted by key)
     fn build_canonical_query_string(params: &BTreeMap<String, String>) -> String {
         params
             .iter()
@@ -42,72 +39,139 @@ impl AliyunSigner {
             .join("&")
     }
 
-    /// Sign a request with Aliyun V3 signature algorithm
+    /// Canonicalize a request path (CanonicalURI).
     ///
-    /// # Arguments
-    /// * `method` - HTTP method (GET, POST, etc.)
-    /// * `params` - Request parameters (will be sorted)
+    /// For RPC-style APIs this is typically just `/`.
+    fn canonicalize_uri(path: &str) -> String {
+        if path.is_empty() {
+            return "/".to_string();
+        }
+        if path == "/" {
+            return "/".to_string();
+        }
+
+        let has_trailing_slash = path.ends_with('/');
+        let trimmed = path.trim_matches('/');
+        let mut out = String::from("/");
+        if !trimmed.is_empty() {
+            out.push_str(
+                &trimmed
+                    .split('/')
+                    .map(percent_encode)
+                    .collect::<Vec<_>>()
+                    .join("/"),
+            );
+        }
+        if has_trailing_slash {
+            out.push('/');
+        }
+        out
+    }
+
+    /// Sign an OpenAPI V3 request.
     ///
-    /// # Returns
-    /// A tuple of (signed_params, headers) where:
-    /// - signed_params: Complete parameters including signature and common params
-    /// - headers: HTTP headers to include in the request
+    /// Returns `(query_string, headers)` where `query_string` is already RFC3986-encoded.
     pub fn sign_request(
         &self,
         method: &str,
-        mut params: BTreeMap<String, String>,
-    ) -> (BTreeMap<String, String>, reqwest::header::HeaderMap) {
-        // Add common parameters
-        params.insert("AccessKeyId".to_string(), self.access_key_id.clone());
-        params.insert("SignatureMethod".to_string(), "HMAC-SHA256".to_string());
-        params.insert("SignatureVersion".to_string(), "1.0".to_string());
-        params.insert("SignatureNonce".to_string(), Self::generate_nonce());
-        params.insert("Timestamp".to_string(), Self::get_timestamp());
-        params.insert("Format".to_string(), "JSON".to_string());
+        host: &str,
+        canonical_uri: &str,
+        action: &str,
+        version: &str,
+        query_params: BTreeMap<String, String>,
+        body: &[u8],
+        content_type: Option<&str>,
+    ) -> (String, reqwest::header::HeaderMap) {
+        let x_acs_date = Self::get_timestamp();
+        let x_acs_signature_nonce = Self::generate_nonce();
+        let x_acs_content_sha256 = sha256_hex(body);
 
-        // Build canonical query string (parameters are already sorted by BTreeMap)
-        let canonical_query = Self::build_canonical_query_string(&params);
+        // Build headers participating in signing.
+        // Must include: host and all x-acs-* headers (except Authorization).
+        // content-type is included if present.
+        let mut signing_headers: BTreeMap<String, String> = BTreeMap::new();
+        signing_headers.insert("host".to_string(), host.trim().to_string());
+        signing_headers.insert("x-acs-action".to_string(), action.trim().to_string());
+        signing_headers.insert(
+            "x-acs-content-sha256".to_string(),
+            x_acs_content_sha256.clone(),
+        );
+        signing_headers.insert("x-acs-date".to_string(), x_acs_date.clone());
+        signing_headers.insert(
+            "x-acs-signature-nonce".to_string(),
+            x_acs_signature_nonce.clone(),
+        );
+        signing_headers.insert("x-acs-version".to_string(), version.trim().to_string());
+        if let Some(ct) = content_type {
+            signing_headers.insert("content-type".to_string(), ct.trim().to_string());
+        }
 
-        // Build string to sign: METHOD&percent_encode(/)&percent_encode(canonical_query)
-        let string_to_sign = format!(
-            "{}&{}&{}",
+        let canonical_headers = signing_headers
+            .iter()
+            .map(|(k, v)| format!("{}:{}\n", k, v.trim()))
+            .collect::<String>();
+
+        let signed_headers = signing_headers.keys().cloned().collect::<Vec<_>>().join(";");
+
+        let canonical_query = Self::build_canonical_query_string(&query_params);
+        let canonical_uri = Self::canonicalize_uri(canonical_uri);
+
+        let canonical_request = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}",
             method.to_uppercase(),
-            percent_encode("/"),
-            percent_encode(&canonical_query)
+            canonical_uri,
+            canonical_query,
+            canonical_headers,
+            signed_headers,
+            x_acs_content_sha256
         );
 
-        // Calculate signature using HMAC-SHA256
-        let signature = self.calculate_signature(&string_to_sign);
+        let hashed_canonical_request = sha256_hex(canonical_request.as_bytes());
+        let string_to_sign = format!("ACS3-HMAC-SHA256\n{}", hashed_canonical_request);
 
-        // Add signature to parameters
-        params.insert("Signature".to_string(), signature);
+        let signature = hmac_sha256_hex(&self.access_key_secret, &string_to_sign);
 
-        // Build headers
+        let authorization = format!(
+            "ACS3-HMAC-SHA256 Credential={},SignedHeaders={},Signature={}",
+            self.access_key_id, signed_headers, signature
+        );
+
+        // Build reqwest headers.
         let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::HOST, host.parse().expect("valid host"));
         headers.insert(
-            "Content-Type",
-            "application/x-www-form-urlencoded".parse().unwrap(),
+            reqwest::header::HeaderName::from_static("x-acs-action"),
+            action.parse().expect("valid header value"),
+        );
+        headers.insert(
+            reqwest::header::HeaderName::from_static("x-acs-version"),
+            version.parse().expect("valid header value"),
+        );
+        headers.insert(
+            reqwest::header::HeaderName::from_static("x-acs-date"),
+            x_acs_date.parse().expect("valid header value"),
+        );
+        headers.insert(
+            reqwest::header::HeaderName::from_static("x-acs-signature-nonce"),
+            x_acs_signature_nonce
+                .parse()
+                .expect("valid header value"),
+        );
+        headers.insert(
+            reqwest::header::HeaderName::from_static("x-acs-content-sha256"),
+            x_acs_content_sha256
+                .parse()
+                .expect("valid header value"),
+        );
+        if let Some(ct) = content_type {
+            headers.insert(reqwest::header::CONTENT_TYPE, ct.parse().expect("valid ct"));
+        }
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            authorization.parse().expect("valid authorization"),
         );
 
-        (params, headers)
-    }
-
-    /// Calculate HMAC-SHA256 signature
-    fn calculate_signature(&self, string_to_sign: &str) -> String {
-        use base64::Engine;
-        use hmac::{Hmac, Mac};
-        type HmacSha256 = Hmac<Sha256>;
-
-        // Key is AccessKeySecret + "&"
-        let key = format!("{}&", self.access_key_secret);
-
-        let mut mac =
-            HmacSha256::new_from_slice(key.as_bytes()).expect("HMAC can take key of any size");
-        mac.update(string_to_sign.as_bytes());
-
-        // Get result and convert to base64
-        let result = mac.finalize();
-        base64::engine::general_purpose::STANDARD.encode(result.into_bytes())
+        (canonical_query, headers)
     }
 }
 
@@ -124,6 +188,32 @@ fn percent_encode(input: &str) -> String {
             _ => format!("%{:02X}", byte),
         })
         .collect()
+}
+
+fn sha256_hex(input: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(input);
+    hex_encode_lower(&hasher.finalize())
+}
+
+fn hmac_sha256_hex(secret: &str, message: &str) -> String {
+    use hmac::{Hmac, Mac};
+    type HmacSha256 = Hmac<Sha256>;
+
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+    mac.update(message.as_bytes());
+    let result = mac.finalize().into_bytes();
+    hex_encode_lower(&result)
+}
+
+fn hex_encode_lower(input: &[u8]) -> String {
+    let mut out = String::with_capacity(input.len() * 2);
+    for b in input {
+        use std::fmt::Write;
+        write!(&mut out, "{:02x}", b).expect("write into string");
+    }
+    out
 }
 
 #[cfg(test)]
@@ -149,5 +239,90 @@ mod tests {
         // BTreeMap sorts keys, so Action comes before Version
         assert!(query.contains("Action=DescribeRefreshTasks"));
         assert!(query.contains("Version=2018-05-10"));
+    }
+
+    #[test]
+    fn test_v3_signature_example_from_docs() {
+        // Example from Aliyun docs (V3 request structure & signature)
+        // https://help.aliyun.com/zh/sdk/product-overview/v3-request-structure-and-signature
+        let signer = AliyunSigner::new(
+            "YourAccessKeyId".to_string(),
+            "YourAccessKeySecret".to_string(),
+        );
+
+        // Build query params (these are the API request parameters in the docs example)
+        let mut query_params = BTreeMap::new();
+        query_params.insert(
+            "ImageId".to_string(),
+            "win2019_1809_x64_dtc_zh-cn_40G_alibase_20230811.vhd".to_string(),
+        );
+        query_params.insert("RegionId".to_string(), "cn-shanghai".to_string());
+
+        // We need deterministic headers (date + nonce) to compare with the example output.
+        // So we reconstruct the signature the same way `sign_request` does, but with fixed
+        // x-acs-date and x-acs-signature-nonce.
+        let method = "POST";
+        let host = "ecs.cn-shanghai.aliyuncs.com";
+        let canonical_uri = "/";
+        let action = "RunInstances";
+        let version = "2014-05-26";
+        let x_acs_date = "2023-10-26T10:22:32Z";
+        let x_acs_signature_nonce = "3156853299f313e23d1673dc12e1703d";
+        let x_acs_content_sha256 =
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+        let canonical_query = AliyunSigner::build_canonical_query_string(&query_params);
+        assert_eq!(
+            canonical_query,
+            "ImageId=win2019_1809_x64_dtc_zh-cn_40G_alibase_20230811.vhd&RegionId=cn-shanghai"
+        );
+
+        let mut signing_headers: BTreeMap<String, String> = BTreeMap::new();
+        signing_headers.insert("host".to_string(), host.to_string());
+        signing_headers.insert("x-acs-action".to_string(), action.to_string());
+        signing_headers.insert(
+            "x-acs-content-sha256".to_string(),
+            x_acs_content_sha256.to_string(),
+        );
+        signing_headers.insert("x-acs-date".to_string(), x_acs_date.to_string());
+        signing_headers.insert(
+            "x-acs-signature-nonce".to_string(),
+            x_acs_signature_nonce.to_string(),
+        );
+        signing_headers.insert("x-acs-version".to_string(), version.to_string());
+
+        let canonical_headers = signing_headers
+            .iter()
+            .map(|(k, v)| format!("{}:{}\n", k, v))
+            .collect::<String>();
+        let signed_headers = signing_headers.keys().cloned().collect::<Vec<_>>().join(";");
+
+        assert_eq!(
+            signed_headers,
+            "host;x-acs-action;x-acs-content-sha256;x-acs-date;x-acs-signature-nonce;x-acs-version"
+        );
+
+        let canonical_request = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}",
+            method,
+            AliyunSigner::canonicalize_uri(canonical_uri),
+            canonical_query,
+            canonical_headers,
+            signed_headers,
+            x_acs_content_sha256
+        );
+
+        let hashed_canonical_request = sha256_hex(canonical_request.as_bytes());
+        assert_eq!(
+            hashed_canonical_request,
+            "7ea06492da5221eba5297e897ce16e55f964061054b7695beedaac1145b1e259"
+        );
+
+        let string_to_sign = format!("ACS3-HMAC-SHA256\n{}", hashed_canonical_request);
+        let signature = hmac_sha256_hex(&signer.access_key_secret, &string_to_sign);
+        assert_eq!(
+            signature,
+            "06563a9e1b43f5dfe96b81484da74bceab24a1d853912eee15083a6f0f3283c0"
+        );
     }
 }
