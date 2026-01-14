@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use utoipa::ToSchema;
 
-use super::signature::AliyunSigner;
+use super::signature::{AliyunSignInput, AliyunSigner};
 
 /// CDN API endpoint
 const CDN_ENDPOINT: &str = "https://cdn.aliyuncs.com";
@@ -163,16 +163,23 @@ impl AliyunCdnClient {
         }
 
         // Sign the request (ACS3-HMAC-SHA256)
-        let (query_string, headers) = self.signer.sign_request(
-            "GET",
-            CDN_HOST,
-            "/",
-            "DescribeRefreshTasks",
-            "2018-05-10",
-            params,
-            b"",
-            None,
-        );
+        let signed = self
+            .signer
+            .sign_request(AliyunSignInput {
+                method: "GET",
+                host: CDN_HOST,
+                canonical_uri: "/",
+                action: "DescribeRefreshTasks",
+                version: "2018-05-10",
+                query_params: params,
+                body: b"",
+                content_type: None,
+                extra_headers: BTreeMap::new(),
+            })
+            .context("Failed to sign Aliyun request")?;
+
+        let query_string = signed.query_string;
+        let headers = signed.headers;
 
         let url = if query_string.is_empty() {
             format!("{}/", CDN_ENDPOINT)

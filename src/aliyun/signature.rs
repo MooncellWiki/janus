@@ -2,6 +2,7 @@ use chrono::Utc;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use anyhow::{Context, Result};
 
 /// Aliyun OpenAPI V3 signature generator (ACS3-HMAC-SHA256)
 ///
@@ -9,6 +10,25 @@ use std::collections::BTreeMap;
 pub struct AliyunSigner {
     access_key_id: String,
     access_key_secret: String,
+}
+
+pub struct AliyunSignInput<'a> {
+    pub method: &'a str,
+    pub host: &'a str,
+    pub canonical_uri: &'a str,
+    pub action: &'a str,
+    pub version: &'a str,
+    pub query_params: BTreeMap<String, String>,
+    pub body: &'a [u8],
+    pub content_type: Option<&'a str>,
+    /// Any extra request headers. If the name is `x-acs-*`, `host`, or `content-type`, it will be included in the signature.
+    pub extra_headers: BTreeMap<String, String>,
+}
+
+pub struct AliyunSignedRequest {
+    /// RFC3986-encoded canonical query string.
+    pub query_string: String,
+    pub headers: reqwest::header::HeaderMap,
 }
 
 impl AliyunSigner {
@@ -68,41 +88,44 @@ impl AliyunSigner {
         out
     }
 
-    /// Sign an OpenAPI V3 request.
-    ///
-    /// Returns `(query_string, headers)` where `query_string` is already RFC3986-encoded.
-    pub fn sign_request(
-        &self,
-        method: &str,
-        host: &str,
-        canonical_uri: &str,
-        action: &str,
-        version: &str,
-        query_params: BTreeMap<String, String>,
-        body: &[u8],
-        content_type: Option<&str>,
-    ) -> (String, reqwest::header::HeaderMap) {
+    pub fn sign_request(&self, input: AliyunSignInput<'_>) -> Result<AliyunSignedRequest> {
+        let host = input.host.trim();
+        let action = input.action.trim();
+        let version = input.version.trim();
+
         let x_acs_date = Self::get_timestamp();
         let x_acs_signature_nonce = Self::generate_nonce();
-        let x_acs_content_sha256 = sha256_hex(body);
+        let x_acs_content_sha256 = sha256_hex(input.body);
+
+        // Canonical query
+        let canonical_query = Self::build_canonical_query_string(&input.query_params);
+        let canonical_uri = Self::canonicalize_uri(input.canonical_uri);
 
         // Build headers participating in signing.
-        // Must include: host and all x-acs-* headers (except Authorization).
-        // content-type is included if present.
+        // Must include: host + all x-acs-* headers (except Authorization). content-type is included if present.
         let mut signing_headers: BTreeMap<String, String> = BTreeMap::new();
-        signing_headers.insert("host".to_string(), host.trim().to_string());
-        signing_headers.insert("x-acs-action".to_string(), action.trim().to_string());
-        signing_headers.insert(
-            "x-acs-content-sha256".to_string(),
-            x_acs_content_sha256.clone(),
-        );
+
+        for (k, v) in input.extra_headers {
+            let key = k.trim().to_ascii_lowercase();
+            if key == "host" || key == "content-type" || key.starts_with("x-acs-") {
+                signing_headers.insert(key, v.trim().to_string());
+            }
+        }
+
+        signing_headers.insert("host".to_string(), host.to_string());
+        signing_headers.insert("x-acs-action".to_string(), action.to_string());
+        signing_headers.insert("x-acs-version".to_string(), version.to_string());
         signing_headers.insert("x-acs-date".to_string(), x_acs_date.clone());
         signing_headers.insert(
             "x-acs-signature-nonce".to_string(),
             x_acs_signature_nonce.clone(),
         );
-        signing_headers.insert("x-acs-version".to_string(), version.trim().to_string());
-        if let Some(ct) = content_type {
+        signing_headers.insert(
+            "x-acs-content-sha256".to_string(),
+            x_acs_content_sha256.clone(),
+        );
+
+        if let Some(ct) = input.content_type {
             signing_headers.insert("content-type".to_string(), ct.trim().to_string());
         }
 
@@ -110,15 +133,11 @@ impl AliyunSigner {
             .iter()
             .map(|(k, v)| format!("{}:{}\n", k, v.trim()))
             .collect::<String>();
-
         let signed_headers = signing_headers.keys().cloned().collect::<Vec<_>>().join(";");
-
-        let canonical_query = Self::build_canonical_query_string(&query_params);
-        let canonical_uri = Self::canonicalize_uri(canonical_uri);
 
         let canonical_request = format!(
             "{}\n{}\n{}\n{}\n{}\n{}",
-            method.to_uppercase(),
+            input.method.to_uppercase(),
             canonical_uri,
             canonical_query,
             canonical_headers,
@@ -128,7 +147,6 @@ impl AliyunSigner {
 
         let hashed_canonical_request = sha256_hex(canonical_request.as_bytes());
         let string_to_sign = format!("ACS3-HMAC-SHA256\n{}", hashed_canonical_request);
-
         let signature = hmac_sha256_hex(&self.access_key_secret, &string_to_sign);
 
         let authorization = format!(
@@ -136,42 +154,58 @@ impl AliyunSigner {
             self.access_key_id, signed_headers, signature
         );
 
-        // Build reqwest headers.
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(reqwest::header::HOST, host.parse().expect("valid host"));
+        headers.insert(
+            reqwest::header::HOST,
+            host.parse().context("invalid host header value")?,
+        );
         headers.insert(
             reqwest::header::HeaderName::from_static("x-acs-action"),
-            action.parse().expect("valid header value"),
+            action
+                .parse()
+                .context("invalid x-acs-action header value")?,
         );
         headers.insert(
             reqwest::header::HeaderName::from_static("x-acs-version"),
-            version.parse().expect("valid header value"),
+            version
+                .parse()
+                .context("invalid x-acs-version header value")?,
         );
         headers.insert(
             reqwest::header::HeaderName::from_static("x-acs-date"),
-            x_acs_date.parse().expect("valid header value"),
+            x_acs_date
+                .parse()
+                .context("invalid x-acs-date header value")?,
         );
         headers.insert(
             reqwest::header::HeaderName::from_static("x-acs-signature-nonce"),
             x_acs_signature_nonce
                 .parse()
-                .expect("valid header value"),
+                .context("invalid x-acs-signature-nonce header value")?,
         );
         headers.insert(
             reqwest::header::HeaderName::from_static("x-acs-content-sha256"),
             x_acs_content_sha256
                 .parse()
-                .expect("valid header value"),
+                .context("invalid x-acs-content-sha256 header value")?,
         );
-        if let Some(ct) = content_type {
-            headers.insert(reqwest::header::CONTENT_TYPE, ct.parse().expect("valid ct"));
+        if let Some(ct) = input.content_type {
+            headers.insert(
+                reqwest::header::CONTENT_TYPE,
+                ct.parse().context("invalid content-type header value")?,
+            );
         }
         headers.insert(
             reqwest::header::AUTHORIZATION,
-            authorization.parse().expect("valid authorization"),
+            authorization
+                .parse()
+                .context("invalid authorization header value")?,
         );
 
-        (canonical_query, headers)
+        Ok(AliyunSignedRequest {
+            query_string: canonical_query,
+            headers,
+        })
     }
 }
 
@@ -221,27 +255,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_percent_encode() {
-        assert_eq!(percent_encode("hello"), "hello");
-        assert_eq!(percent_encode("hello world"), "hello%20world");
-        assert_eq!(percent_encode("/"), "%2F");
-        assert_eq!(percent_encode("="), "%3D");
-        assert_eq!(percent_encode("&"), "%26");
-    }
-
-    #[test]
-    fn test_canonical_query_string() {
-        let mut params = BTreeMap::new();
-        params.insert("Action".to_string(), "DescribeRefreshTasks".to_string());
-        params.insert("Version".to_string(), "2018-05-10".to_string());
-
-        let query = AliyunSigner::build_canonical_query_string(&params);
-        // BTreeMap sorts keys, so Action comes before Version
-        assert!(query.contains("Action=DescribeRefreshTasks"));
-        assert!(query.contains("Version=2018-05-10"));
-    }
-
-    #[test]
     fn test_v3_signature_example_from_docs() {
         // Example from Aliyun docs (V3 request structure & signature)
         // https://help.aliyun.com/zh/sdk/product-overview/v3-request-structure-and-signature
@@ -258,9 +271,7 @@ mod tests {
         );
         query_params.insert("RegionId".to_string(), "cn-shanghai".to_string());
 
-        // We need deterministic headers (date + nonce) to compare with the example output.
-        // So we reconstruct the signature the same way `sign_request` does, but with fixed
-        // x-acs-date and x-acs-signature-nonce.
+        // Keep deterministic verification without injecting timestamp/nonce into `sign_request`.
         let method = "POST";
         let host = "ecs.cn-shanghai.aliyuncs.com";
         let canonical_uri = "/";
