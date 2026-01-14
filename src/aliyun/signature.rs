@@ -1,8 +1,8 @@
+use anyhow::{Context, Result};
 use chrono::Utc;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use anyhow::{Context, Result};
 
 /// Aliyun OpenAPI V3 signature generator (ACS3-HMAC-SHA256)
 ///
@@ -133,7 +133,11 @@ impl AliyunSigner {
             .iter()
             .map(|(k, v)| format!("{}:{}\n", k, v.trim()))
             .collect::<String>();
-        let signed_headers = signing_headers.keys().cloned().collect::<Vec<_>>().join(";");
+        let signed_headers = signing_headers
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(";");
 
         let canonical_request = format!(
             "{}\n{}\n{}\n{}\n{}\n{}",
@@ -306,7 +310,11 @@ mod tests {
             .iter()
             .map(|(k, v)| format!("{}:{}\n", k, v))
             .collect::<String>();
-        let signed_headers = signing_headers.keys().cloned().collect::<Vec<_>>().join(";");
+        let signed_headers = signing_headers
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(";");
 
         assert_eq!(
             signed_headers,
