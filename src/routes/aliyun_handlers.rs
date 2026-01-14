@@ -101,9 +101,9 @@ pub struct RefreshObjectCachesPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_type: Option<String>,
 
-    /// Refresh area: "domestic" or "overseas"
+    /// Whether to directly delete CDN cache nodes (default false)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub area: Option<String>,
+    pub force: Option<bool>,
 }
 
 /// Refresh Aliyun CDN object caches
@@ -133,7 +133,7 @@ pub async fn refresh_object_caches(
     let request = RefreshObjectCachesRequest {
         object_path: payload.object_path,
         object_type: payload.object_type,
-        area: payload.area,
+        force: payload.force,
     };
 
     // Call API

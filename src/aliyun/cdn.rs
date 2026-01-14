@@ -114,9 +114,9 @@ pub struct RefreshObjectCachesRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_type: Option<String>,
 
-    /// Whether to force refresh: "domestic" or "overseas"
+    /// Whether to directly delete CDN cache nodes (default false)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub area: Option<String>,
+    pub force: Option<bool>,
 }
 
 /// Response from RefreshObjectCaches API
@@ -255,18 +255,22 @@ impl AliyunCdnClient {
         &self,
         request: &RefreshObjectCachesRequest,
     ) -> AppResult<RefreshObjectCachesResponse> {
-        // Build query parameters
-        let mut params = BTreeMap::new();
-        params.insert("ObjectPath".to_string(), request.object_path.clone());
+        // RefreshObjectCaches is a POST request with parameters in an HTML form body.
+        // Reference: https://help.aliyun.com/zh/cdn/developer-reference/api-cdn-2018-05-10-refreshobjectcaches
+        let mut form_params = BTreeMap::new();
+        form_params.insert("ObjectPath".to_string(), request.object_path.clone());
 
         if let Some(ref object_type) = request.object_type {
-            params.insert("ObjectType".to_string(), object_type.clone());
+            form_params.insert("ObjectType".to_string(), object_type.clone());
         }
-        if let Some(ref area) = request.area {
-            params.insert("Area".to_string(), area.clone());
+        if let Some(force) = request.force {
+            form_params.insert("Force".to_string(), force.to_string());
         }
 
-        // Sign the request (ACS3-HMAC-SHA256)
+        let form_body = build_form_urlencoded_body(&form_params);
+
+        // Sign the request (ACS3-HMAC-SHA256). For this API, the form body must be included
+        // in the body hash, so keep the canonical query empty.
         let signed = self
             .signer
             .sign_request(AliyunSignInput {
@@ -275,8 +279,8 @@ impl AliyunCdnClient {
                 canonical_uri: "/",
                 action: "RefreshObjectCaches",
                 version: "2018-05-10",
-                query_params: params,
-                body: b"",
+                query_params: BTreeMap::new(),
+                body: form_body.as_bytes(),
                 content_type: Some("application/x-www-form-urlencoded"),
                 extra_headers: BTreeMap::new(),
             })
@@ -296,6 +300,7 @@ impl AliyunCdnClient {
             .client
             .post(&url)
             .headers(headers)
+            .body(form_body)
             .send()
             .await
             .context("Failed to send RefreshObjectCaches request")?;
@@ -321,4 +326,34 @@ impl AliyunCdnClient {
 
         Ok(result)
     }
+}
+
+fn build_form_urlencoded_body(params: &BTreeMap<String, String>) -> String {
+    params
+        .iter()
+        .map(|(k, v)| format!("{}={}", form_urlencode(k), form_urlencode(v)))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+// application/x-www-form-urlencoded encoding.
+// - Space becomes '+'
+// - Unreserved characters are not escaped
+// - Everything else is percent-encoded with upper-case hex
+fn form_urlencode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for &b in input.as_bytes() {
+        match b {
+            b'A'..=b'Z'
+            | b'a'..=b'z'
+            | b'0'..=b'9'
+            | b'-'
+            | b'_'
+            | b'.'
+            | b'~' => out.push(b as char),
+            b' ' => out.push('+'),
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
 }
