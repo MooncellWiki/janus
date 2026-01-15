@@ -1,4 +1,5 @@
 #![allow(clippy::needless_for_each)]
+mod aliyun_handlers;
 mod bilibili_handlers;
 mod misc_handlers;
 use crate::{auth::jwt_auth_middleware, middleware::apply_axum_middleware, state::AppState};
@@ -12,9 +13,18 @@ use utoipa_scalar::{Scalar, Servable};
     tags(
         (name = "health", description = "Health check endpoints"),
         (name = "bilibili", description = "Bilibili dynamic posting endpoints"),
+        (name = "aliyun", description = "Aliyun CDN API endpoints"),
     ),
     components(
-        schemas(bilibili_handlers::DynamicResponse)
+        schemas(
+            bilibili_handlers::DynamicResponse,
+            aliyun_handlers::DescribeRefreshTasksPayload,
+            aliyun_handlers::RefreshObjectCachesPayload,
+            crate::aliyun::DescribeRefreshTasksResponse,
+            crate::aliyun::RefreshObjectCachesResponse,
+            crate::aliyun::cdn::TasksContainer,
+            crate::aliyun::cdn::RefreshTask,
+        )
     ),
     modifiers(&SecurityAddon)
 )]
@@ -50,6 +60,9 @@ pub fn build_router(state: AppState) -> Router {
         ))
         // Bilibili routes (protected by JWT auth)
         .routes(routes!(bilibili_handlers::create_dynamic))
+        // Aliyun routes (protected by JWT auth)
+        .routes(routes!(aliyun_handlers::describe_refresh_tasks))
+        .routes(routes!(aliyun_handlers::refresh_object_caches))
         .split_for_parts();
 
     openapi.paths.paths = openapi
