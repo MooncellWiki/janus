@@ -30,6 +30,11 @@ host = "http://localhost"
 sessdata = "your_bilibili_sessdata_cookie"
 bili_jct = "your_bilibili_bili_jct"
 
+# Aliyun Configuration
+[aliyun]
+access_key_id = "your_aliyun_access_key_id"
+access_key_secret = "your_aliyun_access_key_secret"
+
 # JWT Configuration (required for API authentication)
 # Generate ES256 key pair (compatible with jsonwebtoken):
 #   openssl ecparam -genkey -name prime256v1 -noout -out private.pem

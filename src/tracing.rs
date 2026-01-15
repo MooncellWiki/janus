@@ -12,7 +12,7 @@ use tracing_subscriber::{
 
 use crate::config::{LogFormat, LogLevel, LoggerConfig, SentryConfig};
 
-const MODULE_WHITELIST: &[&str] = &["tower_http", "sqlx::query", "my_axum_template"];
+const MODULE_WHITELIST: &[&str] = &["tower_http", "sqlx::query", "janus"];
 
 fn init_env_filter(override_filter: Option<&String>, level: &LogLevel) -> EnvFilter {
     EnvFilter::try_from_default_env()
