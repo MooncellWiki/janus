@@ -20,6 +20,12 @@ use utoipa_scalar::{Scalar, Servable};
             bilibili_handlers::DynamicResponse,
             aliyun_handlers::DescribeRefreshTasksPayload,
             aliyun_handlers::RefreshObjectCachesPayload,
+            aliyun_handlers::OssEventPayload,
+            aliyun_handlers::OssEventResponse,
+            aliyun_handlers::OssEventData,
+            aliyun_handlers::OssData,
+            aliyun_handlers::OssBucket,
+            aliyun_handlers::OssObject,
             crate::aliyun::DescribeRefreshTasksResponse,
             crate::aliyun::RefreshObjectCachesResponse,
             crate::aliyun::cdn::TasksContainer,
@@ -53,6 +59,8 @@ pub fn build_router(state: AppState) -> Router {
         // Health endpoints (no auth required)
         .routes(routes!(misc_handlers::ping))
         .routes(routes!(misc_handlers::health))
+        // Aliyun EventBridge endpoint (no auth required - EventBridge webhook)
+        .routes(routes!(aliyun_handlers::handle_oss_events))
         // Apply JWT authentication for subsequent routes
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
