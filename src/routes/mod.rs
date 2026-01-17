@@ -49,7 +49,15 @@ impl utoipa::Modify for SecurityAddon {
                         .bearer_format("JWT")
                         .build(),
                 ),
-            )
+            );
+            components.add_security_scheme(
+                "eventbridge_token",
+                utoipa::openapi::security::SecurityScheme::ApiKey(
+                    utoipa::openapi::security::ApiKey::Header(
+                        utoipa::openapi::security::ApiKeyValue::new("x-eventbridge-signature-token")
+                    )
+                ),
+            );
         }
     }
 }

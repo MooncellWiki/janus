@@ -224,6 +224,20 @@ fn map_bucket_to_domain(bucket_name: &str) -> Option<String> {
     }
 }
 
+/// Percent-encode a path for use in URLs (RFC 3986)
+/// Encodes all characters except unreserved characters (A-Z, a-z, 0-9, -, _, ., ~) and forward slash
+fn percent_encode_path(input: &str) -> String {
+    input
+        .bytes()
+        .map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                (byte as char).to_string()
+            }
+            _ => format!("%{:02X}", byte),
+        })
+        .collect()
+}
+
 /// Handle Aliyun EventBridge OSS events
 #[utoipa::path(
     post,
@@ -235,6 +249,9 @@ fn map_bucket_to_domain(bucket_name: &str) -> Option<String> {
         (status = UNAUTHORIZED, description = "Missing or invalid x-eventbridge-signature-token"),
         (status = BAD_REQUEST, description = "Invalid request or unsupported bucket"),
         (status = INTERNAL_SERVER_ERROR, description = "Internal server error")
+    ),
+    security(
+        ("eventbridge_token" = [])
     )
 )]
 pub async fn handle_oss_events(
@@ -242,8 +259,12 @@ pub async fn handle_oss_events(
     headers: HeaderMap,
     Json(raw_payload): Json<serde_json::Value>,
 ) -> AppResult<Json<OssEventResponse>> {
-    // Print the entire received JSON for debugging
-    tracing::info!("Received OSS event: {}", serde_json::to_string_pretty(&raw_payload).unwrap_or_else(|_| format!("{:?}", raw_payload)));
+    // Print the entire received JSON for debugging (debug level to avoid exposing sensitive data)
+    tracing::debug!(
+        "Received OSS event: {}",
+        serde_json::to_string_pretty(&raw_payload)
+            .unwrap_or_else(|_| "<invalid JSON payload>".to_string())
+    );
 
     let token = headers
         .get("x-eventbridge-signature-token")
@@ -279,8 +300,9 @@ pub async fn handle_oss_events(
         AppError::BadRequest(anyhow::anyhow!("Unsupported bucket: {}", bucket_name))
     })?;
 
-    // Build the full URL for the object
-    let object_url = format!("https://{}/{}", domain, object_key);
+    // Build the full URL for the object with proper URL encoding
+    let encoded_object_key = percent_encode_path(object_key);
+    let object_url = format!("https://{}/{}", domain, encoded_object_key);
 
     // Create CDN client
     let client = AliyunCdnClient::new(&state.aliyun_config, state.http_client.clone());
