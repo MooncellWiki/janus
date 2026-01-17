@@ -1,4 +1,5 @@
 use axum::{Json, extract::State, http::HeaderMap};
+use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -215,20 +216,6 @@ pub struct OssEventResponse {
     pub task_id: Option<String>,
 }
 
-/// Percent-encode a path for use in URLs (RFC 3986)
-/// Encodes all characters except unreserved characters (A-Z, a-z, 0-9, -, _, ., ~) and forward slash
-fn percent_encode_path(input: &str) -> String {
-    input
-        .bytes()
-        .map(|byte| match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
-                (byte as char).to_string()
-            }
-            _ => format!("%{:02X}", byte),
-        })
-        .collect()
-}
-
 /// Handle Aliyun EventBridge OSS events
 #[utoipa::path(
     post,
@@ -250,12 +237,7 @@ pub async fn handle_oss_events(
     headers: HeaderMap,
     Json(raw_payload): Json<serde_json::Value>,
 ) -> AppResult<Json<OssEventResponse>> {
-    // Print the entire received JSON for debugging (debug level to avoid exposing sensitive data)
-    tracing::debug!(
-        "Received OSS event: {}",
-        serde_json::to_string_pretty(&raw_payload)
-            .unwrap_or_else(|_| "<invalid JSON payload>".to_string())
-    );
+    tracing::info!("Received OSS event: {}", serde_json::to_string_pretty(&raw_payload).unwrap_or_else(|_| format!("{:?}", raw_payload)));
 
     let token = headers
         .get("x-eventbridge-signature-token")
@@ -296,7 +278,7 @@ pub async fn handle_oss_events(
         })?;
 
     // Build the full URL by replacing {object_key} with the actual encoded object key
-    let encoded_object_key = percent_encode_path(object_key);
+    let encoded_object_key = percent_encode(object_key.as_bytes(), NON_ALPHANUMERIC).to_string();
     let object_url = url_template.replace("{object_key}", &encoded_object_key);
 
     // Create CDN client

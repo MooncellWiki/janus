@@ -14,7 +14,7 @@ use crate::state::AppState;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
     /// Subject (user identifier) - optional since EventBridge tokens may not include it
-    pub sub: Option<String>,
+    pub sub: String,
     /// Issued at (as Unix timestamp)
     pub iat: u64,
 }
@@ -28,7 +28,7 @@ impl Claims {
             .as_secs();
 
         Self {
-            sub: Some(subject),
+            sub: subject,
             iat: now,
         }
     }

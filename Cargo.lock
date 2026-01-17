@@ -1467,6 +1467,7 @@ dependencies = [
  "hmac",
  "jsonwebtoken",
  "mimalloc",
+ "percent-encoding",
  "rand 0.8.5",
  "reqwest",
  "sentry",
