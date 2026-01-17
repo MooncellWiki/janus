@@ -119,6 +119,20 @@ pub struct RefreshObjectCachesRequest {
     pub force: Option<bool>,
 }
 
+/// Form parameters for RefreshObjectCaches API
+/// This struct is used for URL encoding the request body
+#[derive(Debug, Clone, Serialize)]
+struct RefreshObjectCachesFormParams {
+    #[serde(rename = "ObjectPath")]
+    object_path: String,
+
+    #[serde(rename = "ObjectType", skip_serializing_if = "Option::is_none")]
+    object_type: Option<String>,
+
+    #[serde(rename = "Force", skip_serializing_if = "Option::is_none")]
+    force: Option<String>,
+}
+
 /// Response from RefreshObjectCaches API
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RefreshObjectCachesResponse {
@@ -257,15 +271,11 @@ impl AliyunCdnClient {
     ) -> AppResult<RefreshObjectCachesResponse> {
         // RefreshObjectCaches is a POST request with parameters in an HTML form body.
         // Reference: https://help.aliyun.com/zh/cdn/developer-reference/api-cdn-2018-05-10-refreshobjectcaches
-        let mut form_params = BTreeMap::new();
-        form_params.insert("ObjectPath".to_string(), request.object_path.clone());
-
-        if let Some(ref object_type) = request.object_type {
-            form_params.insert("ObjectType".to_string(), object_type.clone());
-        }
-        if let Some(force) = request.force {
-            form_params.insert("Force".to_string(), force.to_string());
-        }
+        let form_params = RefreshObjectCachesFormParams {
+            object_path: request.object_path.clone(),
+            object_type: request.object_type.clone(),
+            force: request.force.map(|f| f.to_string()),
+        };
 
         let form_body = serde_urlencoded::to_string(&form_params)
             .context("Failed to encode form parameters")?;
