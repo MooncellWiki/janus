@@ -1,142 +1,16 @@
-use crate::aliyun::cdn::{
-    AliyunCdnClient, DescribeRefreshTasksRequest, RefreshObjectCachesRequest,
-};
+use crate::aliyun::cdn::{AliyunCdnClient, RefreshObjectCachesRequest};
 use crate::auth::verify_token;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
-use axum::{Json, extract::State};
+use axum::Json;
+use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-
-/// Request body for describing refresh tasks
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct DescribeRefreshTasksRequestBody {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub domain_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub object_path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub page_number: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub page_size: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub object_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_time: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_time: Option<String>,
-}
-
-/// Request body for refreshing object caches
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct RefreshObjectCachesRequestBody {
-    pub object_path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub object_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub area: Option<String>,
-}
 
 /// Generic success response
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SuccessResponse {
     pub code: i32,
-}
-
-/// Describe CDN refresh tasks
-#[utoipa::path(
-    post,
-    path = "/api/aliyun/describeRefreshTasks",
-    tag = "aliyun",
-    request_body = DescribeRefreshTasksRequestBody,
-    responses(
-        (status = 200, description = "Refresh tasks retrieved successfully", body = serde_json::Value),
-        (status = 401, description = "Unauthorized", body = SuccessResponse),
-        (status = 500, description = "Internal server error", body = SuccessResponse),
-    ),
-    security(
-        ("bearer_auth" = [])
-    )
-)]
-pub async fn describe_refresh_tasks(
-    State(state): State<AppState>,
-    Json(req): Json<DescribeRefreshTasksRequestBody>,
-) -> AppResult<Json<serde_json::Value>> {
-    let aliyun_config = state.aliyun_config.ok_or_else(|| {
-        AppError::InternalError(anyhow::anyhow!("Aliyun configuration not found"))
-    })?;
-
-    let client = AliyunCdnClient::new(
-        aliyun_config.access_key_id,
-        aliyun_config.access_key_secret,
-        state.http_client,
-    );
-
-    let request = DescribeRefreshTasksRequest {
-        domain_name: req.domain_name,
-        task_id: req.task_id,
-        object_path: req.object_path,
-        page_number: req.page_number,
-        page_size: req.page_size,
-        object_type: req.object_type,
-        status: req.status,
-        start_time: req.start_time,
-        end_time: req.end_time,
-    };
-
-    let response = client
-        .describe_refresh_tasks(&request)
-        .await
-        .map_err(AppError::InternalError)?;
-
-    Ok(Json(serde_json::to_value(response)?))
-}
-
-/// Refresh CDN object caches
-#[utoipa::path(
-    post,
-    path = "/api/aliyun/refreshObjectCaches",
-    tag = "aliyun",
-    request_body = RefreshObjectCachesRequestBody,
-    responses(
-        (status = 200, description = "Cache refresh initiated successfully", body = serde_json::Value),
-        (status = 401, description = "Unauthorized", body = SuccessResponse),
-        (status = 500, description = "Internal server error", body = SuccessResponse),
-    ),
-    security(
-        ("bearer_auth" = [])
-    )
-)]
-pub async fn refresh_object_caches(
-    State(state): State<AppState>,
-    Json(req): Json<RefreshObjectCachesRequestBody>,
-) -> AppResult<Json<serde_json::Value>> {
-    let aliyun_config = state.aliyun_config.ok_or_else(|| {
-        AppError::InternalError(anyhow::anyhow!("Aliyun configuration not found"))
-    })?;
-
-    let client = AliyunCdnClient::new(
-        aliyun_config.access_key_id,
-        aliyun_config.access_key_secret,
-        state.http_client,
-    );
-
-    let request = RefreshObjectCachesRequest {
-        object_path: req.object_path,
-        object_type: req.object_type,
-        area: req.area,
-    };
-
-    let response = client
-        .refresh_object_caches(&request)
-        .await
-        .map_err(AppError::InternalError)?;
-
-    Ok(Json(serde_json::to_value(response)?))
 }
 
 /// OSS EventBridge event structures
