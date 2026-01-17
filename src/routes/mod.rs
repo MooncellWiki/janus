@@ -1,4 +1,5 @@
 #![allow(clippy::needless_for_each)]
+mod aliyun_handlers;
 mod bilibili_handlers;
 mod misc_handlers;
 use crate::{auth::jwt_auth_middleware, middleware::apply_axum_middleware, state::AppState};
@@ -12,9 +13,20 @@ use utoipa_scalar::{Scalar, Servable};
     tags(
         (name = "health", description = "Health check endpoints"),
         (name = "bilibili", description = "Bilibili dynamic posting endpoints"),
+        (name = "aliyun", description = "Aliyun CDN and OSS event endpoints"),
     ),
     components(
-        schemas(bilibili_handlers::DynamicResponse)
+        schemas(
+            bilibili_handlers::DynamicResponse,
+            aliyun_handlers::DescribeRefreshTasksRequestBody,
+            aliyun_handlers::RefreshObjectCachesRequestBody,
+            aliyun_handlers::SuccessResponse,
+            aliyun_handlers::OssEventPayload,
+            aliyun_handlers::OssEventData,
+            aliyun_handlers::OssData,
+            aliyun_handlers::OssBucket,
+            aliyun_handlers::OssObject,
+        )
     ),
     modifiers(&SecurityAddon)
 )]
@@ -33,7 +45,19 @@ impl utoipa::Modify for SecurityAddon {
                         .bearer_format("JWT")
                         .build(),
                 ),
-            )
+            );
+            components.add_security_scheme(
+                "eventbridge_token",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::HttpBuilder::new()
+                        .scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .description(Some(
+                            "JWT token from EventBridge via x-eventbridge-signature-token header",
+                        ))
+                        .build(),
+                ),
+            );
         }
     }
 }
@@ -50,6 +74,11 @@ pub fn build_router(state: AppState) -> Router {
         ))
         // Bilibili routes (protected by JWT auth)
         .routes(routes!(bilibili_handlers::create_dynamic))
+        // Aliyun CDN routes (protected by JWT auth)
+        .routes(routes!(aliyun_handlers::describe_refresh_tasks))
+        .routes(routes!(aliyun_handlers::refresh_object_caches))
+        // Aliyun OSS event handler (requires custom auth header handling)
+        .routes(routes!(aliyun_handlers::handle_oss_events))
         .split_for_parts();
 
     openapi.paths.paths = openapi

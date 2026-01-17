@@ -43,6 +43,16 @@ public_key = """-----BEGIN PUBLIC KEY-----
 YOUR_PUBLIC_KEY_HERE
 -----END PUBLIC KEY-----"""
 
+# Aliyun Configuration (optional, for CDN and OSS event handling)
+# [aliyun]
+# access_key_id = "your_aliyun_access_key_id"
+# access_key_secret = "your_aliyun_access_key_secret"
+# # Mapping from OSS bucket names to CDN URL templates
+# # The {object_key} placeholder will be replaced with the percent-encoded object key
+# [aliyun.bucket_url_map]
+# "my-oss-bucket" = "https://cdn.example.com/{object_key}"
+# "another-bucket" = "https://static.example.com/{object_key}"
+
 # [sentry]
 # dsn = ""
 # traces_sample_rate = 1.0

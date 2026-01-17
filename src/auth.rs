@@ -13,8 +13,9 @@ use crate::state::AppState;
 /// JWT Claims structure using standard registered claims
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    /// Subject (user identifier)
-    pub sub: String,
+    /// Subject (user identifier) - optional to support different token types
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub: Option<String>,
     /// Issued at (as Unix timestamp)
     pub iat: u64,
 }
@@ -28,7 +29,7 @@ impl Claims {
             .as_secs();
 
         Self {
-            sub: subject,
+            sub: Some(subject),
             iat: now,
         }
     }

@@ -1,0 +1,51 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug janus server",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=janus",
+          "--package=janus"
+        ],
+        "filter": {
+          "name": "janus",
+          "kind": "bin"
+        }
+      },
+      "args": [
+        "server",
+        "--config",
+        "config.toml"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug generate-jwt",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=janus",
+          "--package=janus"
+        ],
+        "filter": {
+          "name": "janus",
+          "kind": "bin"
+        }
+      },
+      "args": [
+        "generate-jwt",
+        "--config",
+        "config.toml",
+        "--subject",
+        "test_user"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
