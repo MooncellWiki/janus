@@ -8,6 +8,15 @@ use std::collections::BTreeMap;
 /// Custom encoding set for RFC 3986 compliance.
 /// This set defines characters that SHOULD be percent-encoded.
 /// It excludes alphanumerics and RFC 3986 unreserved characters: "-" / "_" / "." / "~"
+///
+/// The set includes:
+/// - Control characters (via CONTROLS base set)
+/// - Special characters that have meaning in URIs/URLs (e.g., ?, #, /, :, @, etc.)
+/// - Characters that need escaping for safety (e.g., space, ", <, >, etc.)
+/// - Reserved characters per RFC 3986 (e.g., &, =, +, $, etc.)
+///
+/// Note: "/" is included but handled specially in canonicalize_uri where paths are
+/// split by "/" before encoding segments, preserving path structure.
 const FRAGMENT: &AsciiSet = &CONTROLS
     .add(b' ')
     .add(b'"')
