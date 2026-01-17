@@ -240,8 +240,11 @@ fn map_bucket_to_domain(bucket_name: &str) -> Option<String> {
 pub async fn handle_oss_events(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<OssEventPayload>,
+    Json(raw_payload): Json<serde_json::Value>,
 ) -> AppResult<Json<OssEventResponse>> {
+    // Print the entire received JSON for debugging
+    tracing::info!("Received OSS event: {}", serde_json::to_string_pretty(&raw_payload).unwrap_or_else(|_| format!("{:?}", raw_payload)));
+
     let token = headers
         .get("x-eventbridge-signature-token")
         .ok_or_else(|| {
@@ -261,6 +264,11 @@ pub async fn handle_oss_events(
         AppError::Unauthorized(anyhow::anyhow!(
             "JWT verification failed (x-eventbridge-signature-token): {err}"
         ))
+    })?;
+
+    // Parse the raw JSON into OssEventPayload
+    let payload: OssEventPayload = serde_json::from_value(raw_payload).map_err(|err| {
+        AppError::BadRequest(anyhow::anyhow!("Failed to parse OSS event payload: {}", err))
     })?;
 
     let bucket_name = &payload.data.oss.bucket.name;
