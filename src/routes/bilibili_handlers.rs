@@ -7,7 +7,7 @@ use rand::Rng;
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::info;
+use tracing::{info, warn};
 use utoipa::ToSchema;
 
 use crate::error::{AppError, AppResult};
@@ -167,7 +167,10 @@ async fn handle_create_dynamic_response(
 
     let body = resp.text().await.context("Read response failed")?;
 
-    info!("Create dynamic response: {}", body);
+    info!(
+        response_body = %body,
+        "Create dynamic response received"
+    );
 
     let r: BilibiliCreateResponse =
         serde_json::from_str(&body).context("Parse create dynamic response failed")?;
@@ -306,7 +309,10 @@ pub async fn create_dynamic(
                 break;
             }
             Err(e) => {
-                info!("Error reading multipart field: {}", e);
+                warn!(
+                    error = %e,
+                    "Error reading multipart field"
+                );
                 break;
             }
         }
@@ -323,7 +329,7 @@ pub async fn create_dynamic(
 
     // If files are present, upload them first
     if !files.is_empty() {
-        info!("Uploading {} files", files.len());
+        info!(file_count = files.len(), "Uploading files");
         let mut pics: Vec<PicInfo> = Vec::new();
 
         for (file_data, file_name, content_type) in files {

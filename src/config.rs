@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_variant::to_variant_name;
-use std::{fs, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 use thiserror::Error;
 use tracing::info;
 
@@ -111,6 +111,19 @@ pub struct JwtConfig {
     pub public_key: String,
 }
 
+/// Aliyun configuration for CDN API
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AliyunConfig {
+    /// Aliyun Access Key ID
+    pub access_key_id: String,
+    /// Aliyun Access Key Secret
+    pub access_key_secret: String,
+    /// Bucket name to URL template mapping
+    /// The URL template can contain {object_key} placeholder which will be replaced with the actual object key
+    #[serde(default)]
+    pub bucket_url_map: HashMap<String, String>,
+}
+
 /// Server configuration for application use
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServerConfig {
@@ -145,6 +158,7 @@ pub struct AppSettings {
     pub sentry: Option<SentryConfig>,
     pub bilibili: BilibiliConfig,
     pub jwt: JwtConfig,
+    pub aliyun: AliyunConfig,
 }
 
 impl AppSettings {
