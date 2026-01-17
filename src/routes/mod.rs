@@ -60,7 +60,7 @@ pub fn build_router(state: AppState) -> Router {
         // Health endpoints (no auth required)
         .routes(routes!(misc_handlers::ping))
         .routes(routes!(misc_handlers::health))
-        // Aliyun EventBridge endpoint (JWT via `x-eventbridge-signature-token` header)
+        // Aliyun EventBridge endpoint with custom JWT auth via `x-eventbridge-signature-token` header
         .routes(routes!(aliyun_handlers::handle_oss_events))
         .split_for_parts();
 
