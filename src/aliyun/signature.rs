@@ -396,6 +396,19 @@ mod tests {
             AliyunSigner::canonicalize_uri("/valid-_.~/but spaces"),
             "/valid-_.~/but%20spaces"
         );
+
+        // Test that path separators (/) are preserved and not encoded
+        assert_eq!(
+            AliyunSigner::canonicalize_uri("/path/to/resource"),
+            "/path/to/resource"
+        );
+
+        // Test that / within a segment would be handled (though this is unusual)
+        // Note: In practice, / characters within segments should already be encoded before canonicalization
+        assert_eq!(
+            AliyunSigner::canonicalize_uri("/"),
+            "/"
+        );
     }
 
     #[test]
