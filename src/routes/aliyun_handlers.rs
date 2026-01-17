@@ -1,13 +1,15 @@
-use axum::{Json, extract::State};
+use axum::{Json, extract::State, http::HeaderMap};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::aliyun::{
-    AliyunCdnClient, DescribeRefreshTasksRequest, DescribeRefreshTasksResponse,
-    RefreshObjectCachesRequest, RefreshObjectCachesResponse,
-};
-use crate::error::AppResult;
 use crate::state::AppState;
+use crate::{
+    aliyun::{
+        AliyunCdnClient, DescribeRefreshTasksRequest, DescribeRefreshTasksResponse,
+        RefreshObjectCachesRequest, RefreshObjectCachesResponse,
+    },
+    error::{AppError, AppResult},
+};
 
 /// Request payload for describe refresh tasks endpoint
 #[derive(ToSchema, Serialize, Deserialize, Debug)]
@@ -230,23 +232,43 @@ fn map_bucket_to_domain(bucket_name: &str) -> Option<String> {
     request_body = OssEventPayload,
     responses(
         (status = OK, description = "Successfully processed OSS event and triggered CDN refresh", body = OssEventResponse),
+        (status = UNAUTHORIZED, description = "Missing or invalid x-eventbridge-signature-token"),
         (status = BAD_REQUEST, description = "Invalid request or unsupported bucket"),
         (status = INTERNAL_SERVER_ERROR, description = "Internal server error")
     )
 )]
 pub async fn handle_oss_events(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<OssEventPayload>,
 ) -> AppResult<Json<OssEventResponse>> {
+    let token = headers
+        .get("x-eventbridge-signature-token")
+        .ok_or_else(|| {
+            AppError::Unauthorized(anyhow::anyhow!(
+                "Missing x-eventbridge-signature-token header"
+            ))
+        })?
+        .to_str()
+        .map_err(|_| {
+            AppError::Unauthorized(anyhow::anyhow!(
+                "Invalid x-eventbridge-signature-token header format"
+            ))
+        })?
+        .trim();
+
+    crate::auth::verify_token(token, &state.jwt_config.public_key).map_err(|err| {
+        AppError::Unauthorized(anyhow::anyhow!(
+            "JWT verification failed (x-eventbridge-signature-token): {err}"
+        ))
+    })?;
+
     let bucket_name = &payload.data.oss.bucket.name;
     let object_key = &payload.data.oss.object.key;
 
     // Map bucket to CDN domain
     let domain = map_bucket_to_domain(bucket_name).ok_or_else(|| {
-        crate::error::AppError::BadRequest(anyhow::anyhow!(
-            "Unsupported bucket: {}",
-            bucket_name
-        ))
+        AppError::BadRequest(anyhow::anyhow!("Unsupported bucket: {}", bucket_name))
     })?;
 
     // Build the full URL for the object

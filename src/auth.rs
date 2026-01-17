@@ -5,7 +5,7 @@ use axum::{
 };
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{collections::HashSet, time::{SystemTime, UNIX_EPOCH}};
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -55,6 +55,7 @@ pub fn verify_token(
     let decoding_key = DecodingKey::from_ec_pem(public_key_pem.as_bytes())?;
     let mut validation = Validation::new(Algorithm::ES256);
     validation.validate_exp = false; // No expiration validation
+    validation.required_spec_claims = HashSet::new(); // don't validate “exp”, “nbf”, “aud”, “iss”, “sub”
 
     let token_data = decode::<Claims>(token, &decoding_key, &validation)?;
     Ok(token_data.claims)
