@@ -1,9 +1,43 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
-use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
+use percent_encoding::{AsciiSet, CONTROLS, percent_encode};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+
+/// RFC 3986 unreserved characters that should NOT be percent-encoded.
+/// Unreserved = ALPHA / DIGIT / "-" / "_" / "." / "~"
+/// This set includes all characters EXCEPT alphanumerics and the four unreserved punctuation marks.
+const FRAGMENT: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'<')
+    .add(b'>')
+    .add(b'`')
+    .add(b'#')
+    .add(b'?')
+    .add(b'{')
+    .add(b'}')
+    .add(b'%')
+    .add(b'/')
+    .add(b':')
+    .add(b';')
+    .add(b'=')
+    .add(b'@')
+    .add(b'[')
+    .add(b'\\')
+    .add(b']')
+    .add(b'^')
+    .add(b'|')
+    .add(b'&')
+    .add(b'+')
+    .add(b',')
+    .add(b'$')
+    .add(b'!')
+    .add(b'\'')
+    .add(b'(')
+    .add(b')')
+    .add(b'*');
 
 /// Aliyun OpenAPI V3 signature generator (ACS3-HMAC-SHA256)
 ///
@@ -58,8 +92,8 @@ impl AliyunSigner {
             .map(|(k, v)| {
                 format!(
                     "{}={}",
-                    percent_encode(k.as_bytes(), NON_ALPHANUMERIC),
-                    percent_encode(v.as_bytes(), NON_ALPHANUMERIC)
+                    percent_encode(k.as_bytes(), FRAGMENT),
+                    percent_encode(v.as_bytes(), FRAGMENT)
                 )
             })
             .collect::<Vec<_>>()
@@ -84,7 +118,7 @@ impl AliyunSigner {
             out.push_str(
                 &trimmed
                     .split('/')
-                    .map(|segment| percent_encode(segment.as_bytes(), NON_ALPHANUMERIC).to_string())
+                    .map(|segment| percent_encode(segment.as_bytes(), FRAGMENT).to_string())
                     .collect::<Vec<_>>()
                     .join("/"),
             );
@@ -335,5 +369,57 @@ mod tests {
             signature,
             "06563a9e1b43f5dfe96b81484da74bceab24a1d853912eee15083a6f0f3283c0"
         );
+    }
+
+    #[test]
+    fn test_canonicalize_uri_with_unreserved_chars() {
+        // Test that unreserved characters (-, _, ., ~) are NOT percent-encoded
+        assert_eq!(
+            AliyunSigner::canonicalize_uri("/path-with_dots.and~tilde"),
+            "/path-with_dots.and~tilde"
+        );
+
+        // Test with multiple segments
+        assert_eq!(
+            AliyunSigner::canonicalize_uri("/api/v1.0/user_name-123~test"),
+            "/api/v1.0/user_name-123~test"
+        );
+
+        // Test that special characters ARE encoded
+        assert_eq!(
+            AliyunSigner::canonicalize_uri("/path with spaces"),
+            "/path%20with%20spaces"
+        );
+
+        // Test mixed case
+        assert_eq!(
+            AliyunSigner::canonicalize_uri("/valid-_.~/but spaces"),
+            "/valid-_.~/but%20spaces"
+        );
+    }
+
+    #[test]
+    fn test_build_canonical_query_string_with_unreserved_chars() {
+        // Test that unreserved characters (-, _, ., ~) are NOT percent-encoded
+        let mut params = BTreeMap::new();
+        params.insert("key-1".to_string(), "value_1".to_string());
+        params.insert("key.2".to_string(), "value.2".to_string());
+        params.insert("key~3".to_string(), "value~3".to_string());
+
+        let result = AliyunSigner::build_canonical_query_string(&params);
+        // BTreeMap orders keys alphabetically
+        assert_eq!(result, "key-1=value_1&key.2=value.2&key~3=value~3");
+
+        // Test that special characters ARE encoded
+        let mut params2 = BTreeMap::new();
+        params2.insert("key with space".to_string(), "value with space".to_string());
+        let result2 = AliyunSigner::build_canonical_query_string(&params2);
+        assert_eq!(result2, "key%20with%20space=value%20with%20space");
+
+        // Test mixed case
+        let mut params3 = BTreeMap::new();
+        params3.insert("valid-_~.key".to_string(), "needs encoding!".to_string());
+        let result3 = AliyunSigner::build_canonical_query_string(&params3);
+        assert_eq!(result3, "valid-_~.key=needs%20encoding%21");
     }
 }
