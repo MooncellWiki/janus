@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
+use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -54,7 +55,13 @@ impl AliyunSigner {
     fn build_canonical_query_string(params: &BTreeMap<String, String>) -> String {
         params
             .iter()
-            .map(|(k, v)| format!("{}={}", percent_encode(k), percent_encode(v)))
+            .map(|(k, v)| {
+                format!(
+                    "{}={}",
+                    percent_encode(k.as_bytes(), NON_ALPHANUMERIC),
+                    percent_encode(v.as_bytes(), NON_ALPHANUMERIC)
+                )
+            })
             .collect::<Vec<_>>()
             .join("&")
     }
@@ -77,7 +84,7 @@ impl AliyunSigner {
             out.push_str(
                 &trimmed
                     .split('/')
-                    .map(percent_encode)
+                    .map(|segment| percent_encode(segment.as_bytes(), NON_ALPHANUMERIC).to_string())
                     .collect::<Vec<_>>()
                     .join("/"),
             );
@@ -211,21 +218,6 @@ impl AliyunSigner {
             headers,
         })
     }
-}
-
-/// Percent encode a string according to RFC 3986
-///
-/// This encodes all characters except: A-Z, a-z, 0-9, -, _, ., ~
-fn percent_encode(input: &str) -> String {
-    input
-        .bytes()
-        .map(|byte| match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                (byte as char).to_string()
-            }
-            _ => format!("%{:02X}", byte),
-        })
-        .collect()
 }
 
 fn sha256_hex(input: &[u8]) -> String {

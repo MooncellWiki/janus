@@ -5,6 +5,7 @@ use axum::{
 };
 use serde_json::json;
 use thiserror::Error;
+use tracing::error;
 
 /// Application-level errors for HTTP handlers
 #[derive(Error, Debug)]
@@ -35,7 +36,11 @@ impl IntoResponse for AppError {
         let status = self.status_code();
 
         // Log the detailed error with full context chain
-        tracing::error!("Handler error: {:?}", self);
+        error!(
+            error = ?self,
+            status_code = %status,
+            "Handler error"
+        );
 
         let body = json!({
             "code": 1,
