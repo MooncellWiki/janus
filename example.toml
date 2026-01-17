@@ -35,6 +35,12 @@ bili_jct = "your_bilibili_bili_jct"
 access_key_id = "your_aliyun_access_key_id"
 access_key_secret = "your_aliyun_access_key_secret"
 
+# Bucket to URL template mapping
+# The {object_key} placeholder will be replaced with the actual object key (URL-encoded)
+[aliyun.bucket_url_map]
+prts-static = "https://static.prts.wiki/{object_key}"
+ak-media = "https://media.prts.wiki/{object_key}"
+
 # JWT Configuration (required for API authentication)
 # Generate ES256 key pair (compatible with jsonwebtoken):
 #   openssl ecparam -genkey -name prime256v1 -noout -out private.pem
