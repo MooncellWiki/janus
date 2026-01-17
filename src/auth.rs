@@ -5,7 +5,10 @@ use axum::{
 };
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    collections::HashSet,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;

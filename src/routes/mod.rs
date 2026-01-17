@@ -54,8 +54,10 @@ impl utoipa::Modify for SecurityAddon {
                 "eventbridge_token",
                 utoipa::openapi::security::SecurityScheme::ApiKey(
                     utoipa::openapi::security::ApiKey::Header(
-                        utoipa::openapi::security::ApiKeyValue::new("x-eventbridge-signature-token")
-                    )
+                        utoipa::openapi::security::ApiKeyValue::new(
+                            "x-eventbridge-signature-token",
+                        ),
+                    ),
                 ),
             );
         }

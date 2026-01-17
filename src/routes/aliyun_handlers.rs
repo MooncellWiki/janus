@@ -1,6 +1,7 @@
 use axum::{Json, extract::State, http::HeaderMap};
 use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
 use serde::{Deserialize, Serialize};
+use tracing::info;
 use utoipa::ToSchema;
 
 use crate::state::AppState;
@@ -237,8 +238,6 @@ pub async fn handle_oss_events(
     headers: HeaderMap,
     Json(raw_payload): Json<serde_json::Value>,
 ) -> AppResult<Json<OssEventResponse>> {
-    tracing::info!("Received OSS event: {}", serde_json::to_string_pretty(&raw_payload).unwrap_or_else(|_| format!("{:?}", raw_payload)));
-
     let token = headers
         .get("x-eventbridge-signature-token")
         .ok_or_else(|| {
@@ -262,8 +261,16 @@ pub async fn handle_oss_events(
 
     // Parse the raw JSON into OssEventPayload
     let payload: OssEventPayload = serde_json::from_value(raw_payload).map_err(|err| {
-        AppError::BadRequest(anyhow::anyhow!("Failed to parse OSS event payload: {}", err))
+        AppError::BadRequest(anyhow::anyhow!(
+            "Failed to parse OSS event payload: {}",
+            err
+        ))
     })?;
+
+    info!(
+        event = ?payload,
+        "Received OSS event"
+    );
 
     let bucket_name = &payload.data.oss.bucket.name;
     let object_key = &payload.data.oss.object.key;
