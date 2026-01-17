@@ -5,9 +5,9 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-/// RFC 3986 unreserved characters that should NOT be percent-encoded.
-/// Unreserved = ALPHA / DIGIT / "-" / "_" / "." / "~"
-/// This set includes all characters EXCEPT alphanumerics and the four unreserved punctuation marks.
+/// Custom encoding set for RFC 3986 compliance.
+/// This set defines characters that SHOULD be percent-encoded.
+/// It excludes alphanumerics and RFC 3986 unreserved characters: "-" / "_" / "." / "~"
 const FRAGMENT: &AsciiSet = &CONTROLS
     .add(b' ')
     .add(b'"')
