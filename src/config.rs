@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_variant::to_variant_name;
-use std::{fs, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 use thiserror::Error;
 use tracing::info;
 
@@ -118,6 +118,10 @@ pub struct AliyunConfig {
     pub access_key_id: String,
     /// Aliyun Access Key Secret
     pub access_key_secret: String,
+    /// Bucket name to URL template mapping
+    /// The URL template can contain {object_key} placeholder which will be replaced with the actual object key
+    #[serde(default)]
+    pub bucket_url_map: HashMap<String, String>,
 }
 
 /// Server configuration for application use

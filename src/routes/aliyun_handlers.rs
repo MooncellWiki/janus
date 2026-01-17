@@ -215,15 +215,6 @@ pub struct OssEventResponse {
     pub task_id: Option<String>,
 }
 
-/// Map OSS bucket name to CDN domain
-fn map_bucket_to_domain(bucket_name: &str) -> Option<String> {
-    match bucket_name {
-        "prts-static" => Some("static.prts.wiki".to_string()),
-        "ak-media" => Some("media.prts.wiki".to_string()),
-        _ => None,
-    }
-}
-
 /// Percent-encode a path for use in URLs (RFC 3986)
 /// Encodes all characters except unreserved characters (A-Z, a-z, 0-9, -, _, ., ~) and forward slash
 fn percent_encode_path(input: &str) -> String {
@@ -295,14 +286,18 @@ pub async fn handle_oss_events(
     let bucket_name = &payload.data.oss.bucket.name;
     let object_key = &payload.data.oss.object.key;
 
-    // Map bucket to CDN domain
-    let domain = map_bucket_to_domain(bucket_name).ok_or_else(|| {
-        AppError::BadRequest(anyhow::anyhow!("Unsupported bucket: {}", bucket_name))
-    })?;
+    // Get URL template from bucket map
+    let url_template = state
+        .aliyun_config
+        .bucket_url_map
+        .get(bucket_name)
+        .ok_or_else(|| {
+            AppError::BadRequest(anyhow::anyhow!("Unsupported bucket: {}", bucket_name))
+        })?;
 
-    // Build the full URL for the object with proper URL encoding
+    // Build the full URL by replacing {object_key} with the actual encoded object key
     let encoded_object_key = percent_encode_path(object_key);
-    let object_url = format!("https://{}/{}", domain, encoded_object_key);
+    let object_url = url_template.replace("{object_key}", &encoded_object_key);
 
     // Create CDN client
     let client = AliyunCdnClient::new(&state.aliyun_config, state.http_client.clone());
@@ -318,8 +313,8 @@ pub async fn handle_oss_events(
 
     Ok(Json(OssEventResponse {
         message: format!(
-            "CDN refresh triggered for {} on domain {}",
-            object_key, domain
+            "CDN refresh triggered for {} in bucket {}",
+            object_key, bucket_name
         ),
         task_id: Some(response.refresh_task_id),
     }))
