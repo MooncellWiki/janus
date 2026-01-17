@@ -267,7 +267,8 @@ impl AliyunCdnClient {
             form_params.insert("Force".to_string(), force.to_string());
         }
 
-        let form_body = build_form_urlencoded_body(&form_params);
+        let form_body = serde_urlencoded::to_string(&form_params)
+            .context("Failed to encode form parameters")?;
 
         // Sign the request (ACS3-HMAC-SHA256). For this API, the form body must be included
         // in the body hash, so keep the canonical query empty.
@@ -326,30 +327,4 @@ impl AliyunCdnClient {
 
         Ok(result)
     }
-}
-
-fn build_form_urlencoded_body(params: &BTreeMap<String, String>) -> String {
-    params
-        .iter()
-        .map(|(k, v)| format!("{}={}", form_urlencode(k), form_urlencode(v)))
-        .collect::<Vec<_>>()
-        .join("&")
-}
-
-// application/x-www-form-urlencoded encoding.
-// - Space becomes '+'
-// - Unreserved characters are not escaped
-// - Everything else is percent-encoded with upper-case hex
-fn form_urlencode(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    for &b in input.as_bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char)
-            }
-            b' ' => out.push('+'),
-            _ => out.push_str(&format!("%{:02X}", b)),
-        }
-    }
-    out
 }
