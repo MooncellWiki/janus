@@ -18,18 +18,12 @@ use utoipa_scalar::{Scalar, Servable};
     components(
         schemas(
             bilibili_handlers::DynamicResponse,
-            aliyun_handlers::DescribeRefreshTasksPayload,
-            aliyun_handlers::RefreshObjectCachesPayload,
             aliyun_handlers::OssEventPayload,
             aliyun_handlers::OssEventResponse,
             aliyun_handlers::OssEventData,
             aliyun_handlers::OssData,
             aliyun_handlers::OssBucket,
             aliyun_handlers::OssObject,
-            crate::aliyun::DescribeRefreshTasksResponse,
-            crate::aliyun::RefreshObjectCachesResponse,
-            crate::aliyun::cdn::TasksContainer,
-            crate::aliyun::cdn::RefreshTask,
         )
     ),
     modifiers(&SecurityAddon)
@@ -78,9 +72,6 @@ pub fn build_router(state: AppState) -> Router {
     let (protected_routes, openapi_protected) = OpenApiRouter::new()
         // Bilibili routes (protected by JWT auth)
         .routes(routes!(bilibili_handlers::create_dynamic))
-        // Aliyun routes (protected by JWT auth)
-        .routes(routes!(aliyun_handlers::describe_refresh_tasks))
-        .routes(routes!(aliyun_handlers::refresh_object_caches))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             jwt_auth_middleware,
