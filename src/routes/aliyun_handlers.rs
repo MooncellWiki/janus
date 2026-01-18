@@ -1,9 +1,10 @@
 use axum::{Json, extract::State, http::HeaderMap};
-use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
+use percent_encoding::percent_encode;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
+use crate::aliyun::UNRESERVED;
 use crate::state::AppState;
 use crate::{
     aliyun::{AliyunCdnClient, RefreshObjectCachesRequest},
@@ -149,7 +150,7 @@ pub async fn handle_oss_events(
         })?;
 
     // Build the full URL by replacing {object_key} with the actual encoded object key
-    let encoded_object_key = percent_encode(object_key.as_bytes(), NON_ALPHANUMERIC).to_string();
+    let encoded_object_key = percent_encode(object_key.as_bytes(), UNRESERVED).to_string();
     let object_url = url_template.replace("{object_key}", &encoded_object_key);
 
     // Create CDN client

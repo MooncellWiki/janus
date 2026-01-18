@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 /// RFC 3986 unreserved characters: ALPHA / DIGIT / "-" / "_" / "." / "~"
 /// These characters should NOT be percent-encoded.
-const UNRESERVED: &AsciiSet = &NON_ALPHANUMERIC
+pub const UNRESERVED: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'-')
     .remove(b'_')
     .remove(b'.')
