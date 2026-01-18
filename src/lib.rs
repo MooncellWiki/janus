@@ -1,9 +1,9 @@
+pub mod aliyun;
 pub mod app;
 pub mod auth;
 mod config;
 pub mod error;
 mod middleware;
-mod repository;
 mod routes;
 mod shutdown;
 mod state;
