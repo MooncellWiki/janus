@@ -130,7 +130,7 @@ struct RefreshObjectCachesFormParams {
     object_type: Option<String>,
 
     #[serde(rename = "Force", skip_serializing_if = "Option::is_none")]
-    force: Option<String>,
+    force: Option<bool>,
 }
 
 /// Response from RefreshObjectCaches API
@@ -274,7 +274,7 @@ impl AliyunCdnClient {
         let form_params = RefreshObjectCachesFormParams {
             object_path: request.object_path.clone(),
             object_type: request.object_type.clone(),
-            force: request.force.map(|f| f.to_string()),
+            force: request.force,
         };
 
         let form_body = serde_urlencoded::to_string(&form_params)
