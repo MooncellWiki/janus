@@ -7,10 +7,9 @@ use tracing::info;
 use crate::{
     auth::generate_token,
     config::AppSettings,
-    repository::Repository,
     routes::build_router,
     shutdown::shutdown_signal,
-    state::init_state_with_pg,
+    state::init_state,
     tracing::{init_sentry, init_tracing},
 };
 
@@ -39,8 +38,7 @@ async fn start(config: &AppSettings) -> Result<()> {
     // // Build router
     let listener = TcpListener::bind(config.server.full_url()).await?;
     info!("Server is running on {}", config.server.full_url());
-    let state = init_state_with_pg(config).await;
-    state.repository.migrate().await?;
+    let state = init_state(config).await;
     let router = build_router(state);
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown_signal())

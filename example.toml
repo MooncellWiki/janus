@@ -21,14 +21,21 @@ host = "http://localhost"
 # auth.user = ""  # Uncomment and add SMTP user
 # auth.password = ""  # Uncomment and add SMTP password
 
-# Database Configuration
-[database]
-  uri = "postgres://janus:janus@localhost:25432/janus"
-
 # Bilibili Configuration
 [bilibili]
 sessdata = "your_bilibili_sessdata_cookie"
 bili_jct = "your_bilibili_bili_jct"
+
+# Aliyun Configuration
+[aliyun]
+access_key_id = "your_aliyun_access_key_id"
+access_key_secret = "your_aliyun_access_key_secret"
+
+# Bucket to URL template mapping
+# The {object_key} placeholder will be replaced with the actual object key (URL-encoded)
+[aliyun.bucket_url_map]
+prts-static = "https://static.prts.wiki/{object_key}"
+ak-media = "https://media.prts.wiki/{object_key}"
 
 # JWT Configuration (required for API authentication)
 # Generate ES256 key pair (compatible with jsonwebtoken):

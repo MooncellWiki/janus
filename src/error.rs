@@ -5,6 +5,7 @@ use axum::{
 };
 use serde_json::json;
 use thiserror::Error;
+use tracing::error;
 
 /// Application-level errors for HTTP handlers
 #[derive(Error, Debug)]
@@ -35,20 +36,17 @@ impl IntoResponse for AppError {
         let status = self.status_code();
 
         // Log the detailed error with full context chain
-        tracing::error!("Handler error: {:?}", self);
+        error!(
+            error = ?self,
+            status_code = %status,
+            "Handler error"
+        );
 
         let body = json!({
             "code": 1,
         });
 
         (status, Json(body)).into_response()
-    }
-}
-
-// Implement From for common error types to allow automatic conversion
-impl From<sqlx::Error> for AppError {
-    fn from(err: sqlx::Error) -> Self {
-        AppError::InternalError(anyhow::Error::new(err))
     }
 }
 

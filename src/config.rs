@@ -1,18 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_variant::to_variant_name;
-use std::{fs, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 use thiserror::Error;
 use tracing::info;
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct DatabaseConfig {
-    /// The URI for connecting to the database. For example:
-    /// * Postgres: `postgres://root:12341234@localhost:5432/myapp_development`
-    /// * Sqlite: `sqlite://db.sqlite?mode=rwc`
-    pub uri: String,
-    pub max_connections: Option<u32>,
-    pub connection_timeout_seconds: Option<u64>,
-}
 
 /// SMTP configuration for application use
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -111,6 +101,19 @@ pub struct JwtConfig {
     pub public_key: String,
 }
 
+/// Aliyun configuration for CDN API
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AliyunConfig {
+    /// Aliyun Access Key ID
+    pub access_key_id: String,
+    /// Aliyun Access Key Secret
+    pub access_key_secret: String,
+    /// Bucket name to URL template mapping
+    /// The URL template can contain {object_key} placeholder which will be replaced with the actual object key
+    #[serde(default)]
+    pub bucket_url_map: HashMap<String, String>,
+}
+
 /// Server configuration for application use
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServerConfig {
@@ -140,11 +143,11 @@ impl ServerConfig {
 pub struct AppSettings {
     pub logger: LoggerConfig,
     pub server: ServerConfig,
-    pub database: DatabaseConfig,
     pub mailer: Option<SmtpConfig>,
     pub sentry: Option<SentryConfig>,
     pub bilibili: BilibiliConfig,
     pub jwt: JwtConfig,
+    pub aliyun: AliyunConfig,
 }
 
 impl AppSettings {
