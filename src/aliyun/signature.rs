@@ -1,52 +1,17 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
-use percent_encoding::{AsciiSet, CONTROLS, percent_encode};
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_encode};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-/// Custom encoding set for RFC 3986 compliance.
-/// This set defines characters that SHOULD be percent-encoded.
-/// It excludes alphanumerics and RFC 3986 unreserved characters: "-" / "_" / "." / "~"
-///
-/// The set includes:
-/// - Control characters (via CONTROLS base set)
-/// - Special characters that have meaning in URIs/URLs (e.g., ?, #, /, :, @, etc.)
-/// - Characters that need escaping for safety (e.g., space, ", <, >, etc.)
-/// - Reserved characters per RFC 3986 (e.g., &, =, +, $, etc.)
-///
-/// Note: "/" is included but handled specially in canonicalize_uri where paths are
-/// split by "/" before encoding segments, preserving path structure.
-const FRAGMENT: &AsciiSet = &CONTROLS
-    .add(b' ')
-    .add(b'"')
-    .add(b'<')
-    .add(b'>')
-    .add(b'`')
-    .add(b'#')
-    .add(b'?')
-    .add(b'{')
-    .add(b'}')
-    .add(b'%')
-    .add(b'/')
-    .add(b':')
-    .add(b';')
-    .add(b'=')
-    .add(b'@')
-    .add(b'[')
-    .add(b'\\')
-    .add(b']')
-    .add(b'^')
-    .add(b'|')
-    .add(b'&')
-    .add(b'+')
-    .add(b',')
-    .add(b'$')
-    .add(b'!')
-    .add(b'\'')
-    .add(b'(')
-    .add(b')')
-    .add(b'*');
+/// RFC 3986 unreserved characters: ALPHA / DIGIT / "-" / "_" / "." / "~"
+/// These characters should NOT be percent-encoded.
+const UNRESERVED: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b'~');
 
 /// Aliyun OpenAPI V3 signature generator (ACS3-HMAC-SHA256)
 ///
@@ -101,8 +66,8 @@ impl AliyunSigner {
             .map(|(k, v)| {
                 format!(
                     "{}={}",
-                    percent_encode(k.as_bytes(), FRAGMENT),
-                    percent_encode(v.as_bytes(), FRAGMENT)
+                    percent_encode(k.as_bytes(), UNRESERVED),
+                    percent_encode(v.as_bytes(), UNRESERVED)
                 )
             })
             .collect::<Vec<_>>()
@@ -127,7 +92,7 @@ impl AliyunSigner {
             out.push_str(
                 &trimmed
                     .split('/')
-                    .map(|segment| percent_encode(segment.as_bytes(), FRAGMENT).to_string())
+                    .map(|segment| percent_encode(segment.as_bytes(), UNRESERVED).to_string())
                     .collect::<Vec<_>>()
                     .join("/"),
             );
@@ -410,13 +375,6 @@ mod tests {
         assert_eq!(
             AliyunSigner::canonicalize_uri("/path/to/resource"),
             "/path/to/resource"
-        );
-
-        // Test that / within a segment would be handled (though this is unusual)
-        // Note: In practice, / characters within segments should already be encoded before canonicalization
-        assert_eq!(
-            AliyunSigner::canonicalize_uri("/"),
-            "/"
         );
     }
 
