@@ -63,3 +63,16 @@ jsonwebtoken = "9.3"
 sha2 = "0.10"
 hmac = "0.12"
 percent-encoding = "2.3.2"
+
+[workspace.metadata.release]
+publish = false
+tag-prefix = ""
+shared-version = true
+pre-release-commit-message = "chore: Release {{version}}"
+# Don't talk to crates.io https://github.com/crate-ci/cargo-release/pull/735
+registry = ""
+pre-release-hook = [
+  "just",
+  "pre-release",
+  "{{version}}"
+]
