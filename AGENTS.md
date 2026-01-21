@@ -1,227 +1,130 @@
 # AGENTS.md
 
-This file provides guidance to AI agent when working with code in this repository.
+Guidance for AI agents working with this repository.
 
-## Project Overview
+## Overview
+Janus is a stateless RESTful API gateway that posts to Bilibili dynamics, receives Aliyun OSS EventBridge webhooks, and refreshes Aliyun CDN. No database - pure HTTP API service.
 
-**Janus** is a RESTful API service that provides Bilibili dynamic posting capabilities with JWT authentication and PostgreSQL persistence. The application:
-- Posts content (text and images) to Bilibili dynamics via API integration
-- Uses ES256 JWT authentication for API security
-- Stores data in PostgreSQL with SQLx (compile-time checked queries)
-- Auto-generates OpenAPI documentation with Scalar UI
-- Supports multipart file uploads for images
+## Tech Stack
+- **Axum 0.8** + Tower middleware
+- **Reqwest** for external APIs
+- **Utoipa** for OpenAPI (Scalar UI at `/api/scalar`)
+- **ES256 JWT** (ECDSA P-256) for Bilibili auth
+- **Aliyun V3 signature** for OSS EventBridge
+- **mimalloc** global allocator
 
-**Tech Stack:**
-- **Axum 0.8** web framework with Tower middleware
-- **PostgreSQL** with SQLx for database operations
-- **Utoipa** for OpenAPI documentation
-- **Reqwest** HTTP client for Bilibili API calls
-- **ES256 JWT** (ECDSA with P-256) for authentication
-- **Tracing** subscriber for structured logging
-- **Sentry** for optional error tracking
-
-## Build and Development Commands
-
-### Essential Commands
+## Commands
 ```bash
-# Build the project
 cargo build
-
-# Run server (requires config.toml)
 cargo run -- server --config config.toml
-
-# Generate JWT token for authentication
 cargo run -- generate-jwt --config config.toml --subject user_id
-
-# Show version and build SHA
-cargo run -- version
-
-# Format code
 cargo fmt
-
-# Run linter (strict mode - warnings as errors)
 cargo clippy --all-features -- -D warnings
-```
-
-### Testing
-```bash
-# Run all tests
-cargo test
-
-# Run specific test
-cargo test test_name
-
-# Run tests with output
-cargo test -- --nocapture
-```
-
-### Database Operations
-```bash
-# Run migrations (requires sqlx-cli)
-sqlx migrate run
-
-# Install sqlx-cli if not installed
-cargo install sqlx-cli
-```
-
-### Just Commands
-```bash
-# Initialize development tools
-just init
-
-# Run database migrations
-just up
-
-# Generate changelog before release
-just pre-release <version>
+just init        # Install tools
+just pre-release <version>  # Generate changelog
 ```
 
 ## Architecture
 
-### Configuration System
-All configuration is TOML-based and loaded via `config.rs`. The config file path is passed via CLI argument `--config`. Configuration structure (`AppSettings`):
-- **Logger**: enable, level (trace/debug/info/warn/error), format (compact/pretty/json)
-- **Server**: binding address, port, and host URL
-- **Database**: PostgreSQL URI with max connections and timeout
-- **Smtp**: Optional SMTP configuration for emails
-- **Sentry**: Optional DSN and traces_sample_rate
-- **Bilibili**: sessdata and bili_jct cookies for API authentication
-- **Jwt**: ES256 private/public keys in PEM format
+### Entry Points
+- `main.rs` (15 lines): Sets mimalloc, calls `app::run()`
+- `lib.rs` (11 lines): Public exports: `aliyun`, `app`, `auth`, `error`
+- `app.rs` (84 lines): CLI parser - `server`, `generate-jwt`, `version`
 
-### Application Flow
-1. `main.rs`: Entry point using mimalloc global allocator
-2. `app.rs::run()`: CLI parser (`clap`) with three commands:
-   - `server --config <path>`: Load config, initialize tracing/Sentry, start web server
-   - `generate-jwt --config <path> --subject <id>`: Generate ES256 JWT token
-   - `version`: Display version and build SHA
-3. Server initialization sequence:
-   - Load TOML config via `AppSettings::new()`
-   - Initialize tracing subscriber with module whitelist: `["tower_http", "sqlx::query", "my_axum_template"]`
-   - Initialize Sentry (if configured)
-   - Create `AppState` with PostgreSQL pool, shared HTTP client, and configs
-   - Run database migrations automatically via `repository.migrate()`
-   - Build Axum router with OpenAPI support
-   - Apply Tower middleware (timeout, compression)
-   - Bind TCP listener and start server with graceful shutdown handling
+### AppState (src/state.rs)
+- `bilibili_config: BilibiliConfig` - API credentials (sessdata, bili_jct)
+- `aliyun_config: AliyunConfig` - OSS/CDN credentials
+- `jwt_config: JwtConfig` - ES256 private/public keys
+- `http_client: reqwest::Client` - Shared HTTP client
+- **NO database or repository**
 
-### State Management
-`AppState` (src/state.rs) holds application-wide state:
-- `repository: PostgresRepository` - Database operations with SQLx pool
-- `bilibili_config: BilibiliConfig` - Bilibili API credentials
-- `jwt_config: JwtConfig` - JWT signing/verification keys
-- `http_client: reqwest::Client` - Shared HTTP client for Bilibili API calls
+### Routes (all prefixed with `/api`)
+**Public:**
+- `GET /api/_ping` - Health check
+- `GET /api/_health` - Health check
+- `POST /api/aliyun/events` - OSS EventBridge (custom header auth)
 
-Repository trait provides:
-- `health_check()`: Database connectivity check
-- `migrate()`: Run SQLx migrations from `./migrations` directory
+**Protected (Bearer JWT):**
+- `POST /api/bilibili/createDynamic` - Multipart file upload + dynamic post
 
-### Routing Structure
-Routes are organized in `src/routes/` using Utoipa's OpenApiRouter:
-- All API routes prefixed with `/api` (note: NOT `/api/v1`)
-- **Public routes** (no auth required):
-  - `GET /api/_ping` - Simple ping endpoint
-  - `GET /api/_health` - Database health check
-- **Protected routes** (JWT required):
-  - `POST /api/bilibili/createDynamic` - Create Bilibili dynamic with multipart file upload
-- OpenAPI documentation available at:
-  - `/api/scalar` - Scalar UI
-  - `/api/openapi.json` - OpenAPI spec JSON
-- JWT auth middleware applied via `middleware::from_fn_with_state()` to protected routes
-- Security scheme: HTTP Bearer with JWT format
+**Docs:**
+- `/api/scalar` - Scalar UI
+- `/api/openapi.json` - OpenAPI spec
 
 ### Authentication
-JWT-based authentication using ES256 algorithm (ECDSA with P-256):
-- `Claims` structure: `sub` (subject) and `iat` (issued at timestamp)
-- No expiration validation (`validate_exp = false`) - tokens are long-lived
-- Token generation: `generate_token(subject, private_key_pem)` via CLI command
-- Token verification: `verify_token(token, public_key_pem)`
-- Middleware: `jwt_auth_middleware()` extracts `Authorization: Bearer <token>` header
+1. **Bilibili routes**: ES256 JWT via `Authorization: Bearer <token>` header
+   - Token: `cargo run -- generate-jwt --config config.toml --subject user_id`
+   - No expiration validation - long-lived tokens
+2. **Aliyun routes**: Custom header `x-eventbridge-signature-token` (verified in handler)
+   - Uses same JWT verification as Bilibili routes
 
-### Middleware Layer
-Applied in `src/middleware.rs` via Tower layers:
-- **RequestBodyTimeoutLayer**: 10-second timeout on request body
-- **CompressionLayer**: Response compression (tower-http compression-full)
-
-### Error Handling
-Custom `AppError` enum (src/error.rs) with three variants:
-- `BadRequest(anyhow::Error)` → HTTP 400
-- `Unauthorized(anyhow::Error)` → HTTP 401
-- `InternalError(anyhow::Error)` → HTTP 500
-
-Response format: `{ "code": 1 }` (errors logged server-side with details)
-Automatic conversions from: `sqlx::Error`, `serde_json::Error`, `reqwest::Error`, `anyhow::Error`
-`AppResult<T>` type alias: `Result<T, AppError>`
-
-### Testing
-- CI runs `rustfmt` and `clippy` checks
-- `SQLX_OFFLINE=true` is set in CI to allow offline builds (requires `sqlx-data.json` files)
-- No dedicated test files in codebase (relies on manual testing via HTTP clients)
-
-## Key Development Notes
-
-### Adding New Routes
-1. Create handler function in appropriate module under `src/routes/`:
-   ```rust
-   use crate::{error::AppResult, state::AppState};
-   use axum::{Json, extract::State};
-   use utoipa::ToSchema;
-
-   #[derive(ToSchema, Serialize)]
-   pub struct MyResponse { pub field: String }
-
-   #[utoipa::path(
-       post,
-       tag = "mytag",
-       path = "/myendpoint",
-       request_body(...),
-       responses(...),
-       security(("bearer_auth" = []))
-   )]
-   pub async fn my_handler(
-       State(state): State<AppState>,
-   ) -> AppResult<Json<MyResponse>> {
-       Ok(Json(MyResponse { field: "value".to_string() }))
-   }
-   ```
-2. Register route in `src/routes/mod.rs`:
-   - For public routes: Add before `.route_layer(jwt_auth_middleware)`
-   - For protected routes: Add after `.route_layer(jwt_auth_middleware)`
-3. Add tag to `ApiDoc` struct's `tags()` macro if creating new tag
-4. Routes automatically prefixed with `/api` and documented in OpenAPI spec
-
-### Database Queries
-- Use SQLx with compile-time query verification
-- Access pool via `state.repository.pool` (it's public but used directly in queries)
-- Place migration files in `./migrations` directory
-- Create migrations: `sqlx migrate add -r migration_name`
-- Repository trait allows for alternative database backends
-
-### Error Handling in Handlers
+### Error Handling (src/error.rs)
 ```rust
-use crate::error::{AppError, AppResult};
-
-pub async fn my_handler() -> AppResult<Json<Response>> {
-    // Use ? operator for automatic conversion
-    let data = risky_operation()?;
-
-    // Or use AppError explicitly
-    if invalid {
-        return Err(AppError::BadRequest(anyhow::anyhow!("Invalid input")));
-    }
-
-    Ok(Json(data))
+pub enum AppError {
+    BadRequest(anyhow::Error),    // 400
+    Unauthorized(anyhow::Error),  // 401
+    InternalError(anyhow::Error),  // 500
 }
+// Response: { "code": 1 } (errors logged server-side)
 ```
 
-### Logging
-Use `tracing` macros, not `println!` or `log!`:
-```rust
-use tracing::info;
-info!("Creating dynamic with {} images", image_count);
+## Configuration (example.toml)
+- `logger`: enable, level (trace/debug/info/warn/error), format (compact/pretty/json)
+- `server`: binding, port, host
+- `bilibili`: sessdata, bili_jct
+- `aliyun`: access_key_id, access_key_secret, bucket_url_map
+- `jwt`: private_key, public_key (ES256 PEM)
+- `sentry`: dsn, traces_sample_rate (optional)
+
+## Anti-Patterns to Avoid
+
+**Critical:**
+- `.unwrap()`/`.expect()` in handlers (18 instances in bilibili_handlers.rs) - replace with Result
+
+**Medium:**
+- Excessive `.clone()` (15 instances) - use references
+- String conversions (`.to_string()`) - use `&str` where ownership not needed
+
+**CI Requirements:**
+- `cargo fmt` must pass
+- `cargo clippy --all-features -- -D warnings` must pass
+- Code style: 4-space indentation for .rs (100 char limit)
+
+## Module Organization
+```
+src/
+├── main.rs           # CLI entry
+├── lib.rs            # Public exports
+├── app.rs            # CLI + server startup
+├── config.rs         # TOML config
+├── state.rs          # AppState
+├── error.rs          # AppError
+├── auth.rs           # JWT ES256
+├── middleware.rs     # Tower layers (timeout, compression)
+├── tracing.rs        # Logging setup
+├── shutdown.rs       # Graceful shutdown
+├── aliyun/          # OSS signature + CDN
+│   ├── cdn.rs
+│   └── signature.rs (with tests)
+└── routes/           # HTTP handlers
+    ├── bilibili_handlers.rs
+    ├── aliyun_handlers.rs
+    └── misc_handlers.rs
 ```
 
-### Memory Allocation
-The application uses **mimalloc** as the global allocator (configured in `main.rs`) for improved performance.
+## Notes
 
-### Graceful Shutdown
-Implemented via `shutdown.rs` using Tokio signals, ensuring clean connection closure on termination.
+**Architecture Gotchas:**
+- NO database/SQLx (despite outdated README/AGENTS.md claims)
+- NO migrations directory
+- CI runs `rustfmt` + `clippy` ONLY (no tests)
+- Only 3 tests exist (aliyun/signature.rs) - run manually with `cargo test`
+
+**Rust 2024 Edition:**
+- Uses experimental edition (pinned to 1.92.0)
+- May have breaking changes from 2021 edition
+
+**Release Process:**
+1. `just pre-release <version>` - generates CHANGELOG.md via git-cliff
+2. `cargo release <version>` - creates git tag
+3. GitHub Action builds/pushes Docker image to GHCR
