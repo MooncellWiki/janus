@@ -1,10 +1,8 @@
 use axum::{Json, extract::State, http::HeaderMap};
-use percent_encoding::percent_encode;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::aliyun::UNRESERVED;
 use crate::state::AppState;
 use crate::{
     aliyun::{AliyunCdnClient, RefreshObjectCachesRequest},
@@ -149,9 +147,8 @@ pub async fn handle_oss_events(
             AppError::BadRequest(anyhow::anyhow!("Unsupported bucket: {}", bucket_name))
         })?;
 
-    // Build the full URL by replacing {object_key} with the actual encoded object key
-    let encoded_object_key = percent_encode(object_key.as_bytes(), UNRESERVED).to_string();
-    let object_url = url_template.replace("{object_key}", &encoded_object_key);
+    // Build the full URL by replacing {object_key} with the actual object key
+    let object_url = url_template.replace("{object_key}", object_key);
 
     // Create CDN client
     let client = AliyunCdnClient::new(&state.aliyun_config, state.http_client.clone());
