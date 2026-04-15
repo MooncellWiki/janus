@@ -1,4 +1,5 @@
 use axum::{Json, extract::State, http::HeaderMap};
+use percent_encoding::{AsciiSet, percent_encode};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
@@ -8,6 +9,28 @@ use crate::{
     aliyun::{AliyunCdnClient, RefreshObjectCachesRequest},
     error::{AppError, AppResult},
 };
+pub const URI: &AsciiSet = &UNRESERVED
+    // gen-delims
+    .remove(b':')
+    .remove(b'/')
+    .remove(b'?')
+    .remove(b'#')
+    .remove(b'[')
+    .remove(b']')
+    .remove(b'@')
+    // sub-delims
+    .remove(b'!')
+    .remove(b'$')
+    .remove(b'&')
+    .remove(b'$')
+    .remove(b'\'')
+    .remove(b'(')
+    .remove(b')')
+    .remove(b'*')
+    .remove(b'+')
+    .remove(b',')
+    .remove(b';')
+    .remove(b'=');
 
 /// OSS bucket information in event data
 #[derive(ToSchema, Serialize, Deserialize, Debug)]
@@ -147,8 +170,9 @@ pub async fn handle_oss_events(
             AppError::BadRequest(anyhow::anyhow!("Unsupported bucket: {}", bucket_name))
         })?;
 
-    // Build the full URL by replacing {object_key} with the actual object key
-    let object_url = url_template.replace("{object_key}", object_key);
+    // Build the full URL by replacing {object_key} with the actual encoded object key
+    let encoded_object_key = percent_encode(object_key.as_bytes(), URI).to_string();
+    let object_url = url_template.replace("{object_key}", &encoded_object_key);
 
     // Create CDN client
     let client = AliyunCdnClient::new(&state.aliyun_config, state.http_client.clone());
