@@ -30,6 +30,17 @@ pub enum Commands {
         #[arg(short, long)]
         subject: String,
     },
+    /// Refresh CDN cache for an object
+    RefreshCdn {
+        #[arg(short, long, default_value = "config.toml")]
+        config: String,
+        /// Object key in the bucket
+        #[arg(short, long)]
+        object_key: String,
+        /// Bucket name (must exist in bucket_url_map config)
+        #[arg(short, long)]
+        bucket_name: String,
+    },
     /// Show version information
     Version,
 }
@@ -66,6 +77,43 @@ pub async fn run() -> Result<()> {
 
             println!("Generated JWT token for subject '{}':", subject);
             println!("{}", token);
+
+            Ok(())
+        }
+        Commands::RefreshCdn {
+            config,
+            object_key,
+            bucket_name,
+        } => {
+            let config = AppSettings::new(Path::new(&config))?;
+
+            let url_template = config
+                .aliyun
+                .bucket_url_map
+                .get(&bucket_name)
+                .ok_or_else(|| anyhow::anyhow!("Unsupported bucket: {}", bucket_name))?;
+
+            use percent_encoding::percent_encode;
+            let encoded_object_key =
+                percent_encode(object_key.as_bytes(), crate::routes::URI).to_string();
+            let object_url = url_template.replace("{object_key}", &encoded_object_key);
+
+            let http_client = reqwest::Client::new();
+            let client = crate::aliyun::AliyunCdnClient::new(&config.aliyun, http_client);
+
+            let request = crate::aliyun::RefreshObjectCachesRequest {
+                object_path: object_url.clone(),
+                object_type: Some("File".to_string()),
+                force: Some(false),
+            };
+
+            let response = client.refresh_object_caches(&request).await?;
+
+            println!(
+                "CDN refresh triggered for '{}' in bucket '{}'",
+                object_key, bucket_name
+            );
+            println!("Task ID: {}", response.refresh_task_id);
 
             Ok(())
         }

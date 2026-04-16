@@ -2,7 +2,9 @@
 mod aliyun_handlers;
 mod bilibili_handlers;
 mod misc_handlers;
+
 use crate::{auth::jwt_auth_middleware, middleware::apply_axum_middleware, state::AppState};
+pub use aliyun_handlers::URI;
 use axum::{Json, Router, middleware, routing::get};
 use utoipa::OpenApi;
 use utoipa_axum::{router::OpenApiRouter, routes};
