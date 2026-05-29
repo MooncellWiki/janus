@@ -3,7 +3,7 @@ use axum::{
     Json, debug_handler,
     extract::{Multipart, State},
 };
-use rand::Rng;
+use rand::RngExt;
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -97,7 +97,7 @@ fn create_headers(sessdata: &str) -> reqwest::header::HeaderMap {
 
 /// Generate random nonce
 fn get_nonce() -> i32 {
-    rand::thread_rng().gen_range(1000..9999)
+    rand::rng().random_range(1000..9999)
 }
 
 /// Get unix timestamp in seconds

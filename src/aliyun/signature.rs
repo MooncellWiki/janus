@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
+use hmac::{Hmac, KeyInit, Mac};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_encode};
-use rand::RngCore;
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
@@ -51,7 +52,7 @@ impl AliyunSigner {
     /// Generate a random nonce (hex string) for request.
     fn generate_nonce() -> String {
         let mut bytes = [0u8; 16];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        rand::rng().fill_bytes(&mut bytes);
         hex_encode_lower(&bytes)
     }
 
@@ -235,7 +236,6 @@ fn sha256_hex(input: &[u8]) -> String {
 }
 
 fn hmac_sha256_hex(secret: &str, message: &str) -> String {
-    use hmac::{Hmac, Mac};
     type HmacSha256 = Hmac<Sha256>;
 
     let mut mac =
