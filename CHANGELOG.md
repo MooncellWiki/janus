@@ -2,9 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-06-03
+
+[5217c02](5217c024311aa31c75bbd1b8d7b899bb58fc3fe6)...[0208c3f](0208c3f3db14ce6c1e8805cd46f8e3a1282906d0)
+
+### 🐛 Bug Fixes
+
+- Jsonwebtoken use rust crypto ([0208c3f](https://github.com/MooncellWiki/ak-asset-storage/commit/0208c3f3db14ce6c1e8805cd46f8e3a1282906d0))
+
 ## [0.3.0] - 2026-05-29
 
-[7b8bca3](7b8bca3d8585f428eed77cd9b35c0c87dbe34c91)...[93799c5](93799c58acb6f28d14616eea99104b2f923b1de6)
+[7b8bca3](7b8bca3d8585f428eed77cd9b35c0c87dbe34c91)...[5217c02](5217c024311aa31c75bbd1b8d7b899bb58fc3fe6)
 
 ### 🚀 Features
 
@@ -14,6 +22,10 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug Fixes
 
 - Import ([86514e2](https://github.com/MooncellWiki/ak-asset-storage/commit/86514e25224f0aeebece106f428d816a188fcaa5))
+
+### ⚙️ Miscellaneous Tasks
+
+- Release 0.3.0 ([5217c02](https://github.com/MooncellWiki/ak-asset-storage/commit/5217c024311aa31c75bbd1b8d7b899bb58fc3fe6))
 
 ## [0.2.2] - 2026-04-15
 
