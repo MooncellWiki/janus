@@ -2,13 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2026-06-04
+
+[f871104](f871104e5b8edeb354f463674b7f2357ec730f38)...[8d41d42](8d41d42cc17c6211c2678d45bf2f2cc49ccd035d)
+
+### 🐛 Bug Fixes
+
+- 更大的超时时间 不然发b博有可能超时 ([889420e](https://github.com/MooncellWiki/ak-asset-storage/commit/889420e38f0cc028049811106bca7c3cb0ea8235))
+
+### ⚙️ Miscellaneous Tasks
+
+- Add vscode debug config ([8d41d42](https://github.com/MooncellWiki/ak-asset-storage/commit/8d41d42cc17c6211c2678d45bf2f2cc49ccd035d))
+
 ## [0.3.1] - 2026-06-03
 
-[5217c02](5217c024311aa31c75bbd1b8d7b899bb58fc3fe6)...[0208c3f](0208c3f3db14ce6c1e8805cd46f8e3a1282906d0)
+[5217c02](5217c024311aa31c75bbd1b8d7b899bb58fc3fe6)...[f871104](f871104e5b8edeb354f463674b7f2357ec730f38)
 
 ### 🐛 Bug Fixes
 
 - Jsonwebtoken use rust crypto ([0208c3f](https://github.com/MooncellWiki/ak-asset-storage/commit/0208c3f3db14ce6c1e8805cd46f8e3a1282906d0))
+
+### ⚙️ Miscellaneous Tasks
+
+- Release 0.3.1 ([f871104](https://github.com/MooncellWiki/ak-asset-storage/commit/f871104e5b8edeb354f463674b7f2357ec730f38))
 
 ## [0.3.0] - 2026-05-29
 
