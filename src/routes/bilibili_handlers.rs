@@ -6,7 +6,7 @@ use axum::{
 use rand::RngExt;
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
 use utoipa::ToSchema;
 
@@ -106,6 +106,14 @@ fn get_unix_seconds() -> f64 {
         .duration_since(UNIX_EPOCH)
         .expect("System time should be after UNIX epoch")
         .as_secs_f64()
+}
+
+/// Get unix timestamp in milliseconds
+fn get_unix_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("System time should be after UNIX epoch")
+        .as_millis() as u64
 }
 
 /// Upload a single image to Bilibili
@@ -273,6 +281,14 @@ pub async fn create_dynamic(
     State(state): State<AppState>,
     mut multipart: Multipart,
 ) -> AppResult<Json<DynamicResponse>> {
+    let request_received_at_unix_ms = get_unix_millis();
+    let request_received_at = Instant::now();
+
+    info!(
+        request_received_at_unix_ms,
+        "Received create dynamic request"
+    );
+
     // Extract Bilibili config
     let bilibili_config = &state.bilibili_config;
 
@@ -284,6 +300,14 @@ pub async fn create_dynamic(
         match multipart.next_field().await {
             Ok(Some(field)) => {
                 let field_name = field.name().unwrap_or("").to_string();
+
+                info!(
+                    request_received_at_unix_ms,
+                    elapsed_ms = request_received_at.elapsed().as_millis() as u64,
+                    field_name = %field_name,
+                    has_file_name = field.file_name().is_some(),
+                    "Multipart field received"
+                );
 
                 match field_name.as_str() {
                     "msg" => {
@@ -297,8 +321,30 @@ pub async fn create_dynamic(
                                 .content_type()
                                 .unwrap_or("application/octet-stream")
                                 .to_string();
-                            if let Ok(data) = field.bytes().await {
-                                files.push((data.to_vec(), file_name, content_type));
+                            match field.bytes().await {
+                                Ok(data) => {
+                                    info!(
+                                        request_received_at_unix_ms,
+                                        elapsed_ms = request_received_at.elapsed().as_millis()
+                                            as u64,
+                                        file_name = %file_name,
+                                        content_type = %content_type,
+                                        file_size = data.len(),
+                                        "Multipart file fully read"
+                                    );
+                                    files.push((data.to_vec(), file_name, content_type));
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        request_received_at_unix_ms,
+                                        elapsed_ms = request_received_at.elapsed().as_millis()
+                                            as u64,
+                                        file_name = %file_name,
+                                        content_type = %content_type,
+                                        error = %e,
+                                        "Error reading multipart file bytes"
+                                    );
+                                }
                             }
                         }
                     }
@@ -310,6 +356,8 @@ pub async fn create_dynamic(
             }
             Err(e) => {
                 warn!(
+                    request_received_at_unix_ms,
+                    elapsed_ms = request_received_at.elapsed().as_millis() as u64,
                     error = %e,
                     "Error reading multipart field"
                 );
