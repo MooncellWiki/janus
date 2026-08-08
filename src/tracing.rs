@@ -1,7 +1,5 @@
-use std::str::FromStr;
-
 use anyhow::Result;
-use sentry::{integrations::tracing::EventFilter, types::Dsn};
+use sentry::integrations::tracing::EventFilter;
 use tracing::{Level, Metadata, level_filters::LevelFilter};
 use tracing_subscriber::{
     EnvFilter, Layer, Registry,
@@ -91,10 +89,10 @@ pub fn init_tracing(config: &LoggerConfig) {
 }
 
 pub fn init_sentry(sentry_cfg: &SentryConfig) -> Result<sentry::ClientInitGuard> {
-    Ok(sentry::init(sentry::ClientOptions {
-        dsn: Some(Dsn::from_str(&sentry_cfg.dsn)?),
-        release: sentry::release_name!(),
-        traces_sample_rate: sentry_cfg.traces_sample_rate,
-        ..Default::default()
-    }))
+    Ok(sentry::init(
+        sentry::ClientOptions::new()
+            .dsn(&sentry_cfg.dsn)
+            .maybe_release(sentry::release_name!())
+            .traces_sample_rate(sentry_cfg.traces_sample_rate),
+    ))
 }
