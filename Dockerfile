@@ -1,4 +1,4 @@
-FROM rust:1.97-trixie AS build-stage
+FROM rust:1.99.1-trixie AS build-stage
 ENV SQLX_OFFLINE=true
 WORKDIR /app
 COPY . /app/
