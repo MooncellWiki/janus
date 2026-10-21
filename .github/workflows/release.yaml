@@ -1,18 +1,29 @@
 name: release
+
 on:
   push:
     tags:
       - "*"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Release
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Docker buildx
         uses: docker/setup-buildx-action@v4
@@ -43,5 +54,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=janus
+          cache-to: type=gha,mode=max,scope=janus

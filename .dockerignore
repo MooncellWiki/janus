@@ -1,0 +1,7 @@
+# Only send the files needed to compile Janus to the builder.
+**
+!Cargo.toml
+!Cargo.lock
+!rust-toolchain.toml
+!src/
+!src/**

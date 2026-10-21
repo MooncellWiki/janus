@@ -213,6 +213,28 @@ just init
 just pre-release <version>
 ```
 
+## Docker
+
+```bash
+docker build -t janus:local .
+docker run --rm -p 25150:25150 \
+  --mount type=bind,src="$(pwd)/config.toml",dst=/app/config.toml,readonly \
+  janus:local
+
+# Override the default server command to use other CLI commands
+docker run --rm janus:local /app/janus version
+```
+
+Create `config.toml` from `example.toml` and fill in your credentials before starting the
+container. The container runs as UID/GID `10001:10001`; the mounted configuration must be
+readable by that user. Bind the server to `0.0.0.0` in the configuration to expose it outside
+the container. Local configuration, keys, and build artifacts are excluded from the build
+context.
+
+Dependency compilation is cached separately from application code with `cargo-chef`.
+CI and release builds share a scoped BuildKit cache, and release images include the commit
+SHA in `/app/janus version`.
+
 ## Development
 
 ### Code Style
@@ -229,7 +251,9 @@ just pre-release <version>
 cargo test
 ```
 
-Note: Only a few tests exist (aliyun/signature.rs). CI does not run tests automatically.
+CI checks formatting, runs Clippy for all targets and features, runs the tests with the
+lockfile enforced, and builds the Docker image. A container smoke test verifies the CLI and
+the `/api/_ping` endpoint using `example.toml`.
 
 ### Release Process
 
