@@ -19,7 +19,8 @@ cargo build
 cargo run -- server --config config.toml
 cargo run -- generate-jwt --config config.toml --subject user_id
 cargo fmt
-cargo clippy --all-features -- -D warnings
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked --all-features
 just init        # Install tools
 just pre-release <version>  # Generate changelog
 ```
@@ -86,8 +87,10 @@ pub enum AppError {
 - String conversions (`.to_string()`) - use `&str` where ownership not needed
 
 **CI Requirements:**
-- `cargo fmt` must pass
-- `cargo clippy --all-features -- -D warnings` must pass
+- `cargo fmt --all -- --check` must pass
+- `cargo clippy --locked --all-targets --all-features -- -D warnings` must pass
+- `cargo test --locked --all-features` must pass
+- Docker image must build and pass the smoke test (`/app/janus version`, `GET /api/_ping`)
 - Code style: 4-space indentation for .rs (100 char limit)
 
 ## Module Organization
@@ -117,8 +120,8 @@ src/
 **Architecture Gotchas:**
 - NO database/SQLx (despite outdated README/AGENTS.md claims)
 - NO migrations directory
-- CI runs `rustfmt` + `clippy` ONLY (no tests)
-- Only 3 tests exist (aliyun/signature.rs) - run manually with `cargo test`
+- CI runs `rustfmt`, `clippy`, `cargo test`, and a Docker build + smoke test
+- Only 3 tests exist (aliyun/signature.rs)
 
 **Rust 2024 Edition:**
 - Uses experimental edition (pinned to 1.92.0)

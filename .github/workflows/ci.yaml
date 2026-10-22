@@ -1,47 +1,84 @@
 name: CI
+
 on:
   push:
     branches:
       - main
   pull_request:
 
-env:
-  RUST_TOOLCHAIN: stable
-  TOOLCHAIN_PROFILE: minimal
-  SQLX_OFFLINE: true
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Only cancel superseded PR runs; every push to main should finish and save caches.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   rustfmt:
     name: Check Rust Style
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
+    timeout-minutes: 10
 
     steps:
       - name: Checkout the code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           components: rustfmt
+          cache: false
       - name: Rustfmt Check
-        uses: actions-rust-lang/rustfmt@v1
+        run: cargo fmt --all -- --check
 
   clippy:
-    name: Run Clippy
+    name: Clippy & Tests
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
+    timeout-minutes: 20
 
     steps:
       - name: Checkout the code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           components: clippy
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
+          cache-save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Run cargo clippy
-        shell: bash
-        run: cargo clippy --all-features -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Run tests
+        run: cargo test --locked --all-features
+
+  docker:
+    name: Build and Test Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Setup Docker buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: janus:ci
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=janus
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=janus' || '' }}
+      - name: Smoke test container
+        run: |
+          docker run --rm --network none janus:ci /app/janus version
+          docker run --detach --name janus-smoke \
+            --publish 127.0.0.1:25150:25150 \
+            --volume "$PWD/example.toml:/app/config.toml:ro" janus:ci
+          trap 'docker logs janus-smoke; docker rm --force janus-smoke > /dev/null' EXIT
+          curl --fail --show-error --silent \
+            --retry 10 --retry-all-errors --retry-delay 1 --retry-max-time 30 \
+            http://127.0.0.1:25150/api/_ping
