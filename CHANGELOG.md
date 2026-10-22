@@ -2,9 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-10-22
+
+[c438d37](c438d3766cde02413422a913ed9d839d3673ed80)...[c90fd5c](c90fd5c1972583d7479c9e808b38bffa9755b3da)
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies ([c9321e3](https://github.com/MooncellWiki/ak-asset-storage/commit/c9321e3b08f80ac3a0fe775831ec5845f72cebb5))
+- Update dependencies, Utoipa 6, and Rust 1.99.1 (#25) ([99be1e1](https://github.com/MooncellWiki/ak-asset-storage/commit/99be1e1bc92135c18a04905b146fbd6b3ca8f4e3)), Co-authored-by:Brenda Wood <flyimbed@gmail.com>
+- Update dependiences ([396e010](https://github.com/MooncellWiki/ak-asset-storage/commit/396e010c53b440d54adadbaa64e246f664ee18e7))
+- Optimize Rust checks and Docker build caching (#26) ([c90fd5c](https://github.com/MooncellWiki/ak-asset-storage/commit/c90fd5c1972583d7479c9e808b38bffa9755b3da)), Co-authored-by:StarHeartHunt <starheart233@gmail.com>
+
 ## [0.3.2] - 2026-06-04
 
-[f871104](f871104e5b8edeb354f463674b7f2357ec730f38)...[8d41d42](8d41d42cc17c6211c2678d45bf2f2cc49ccd035d)
+[f871104](f871104e5b8edeb354f463674b7f2357ec730f38)...[c438d37](c438d3766cde02413422a913ed9d839d3673ed80)
 
 ### 🐛 Bug Fixes
 
@@ -13,6 +24,7 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Add vscode debug config ([8d41d42](https://github.com/MooncellWiki/ak-asset-storage/commit/8d41d42cc17c6211c2678d45bf2f2cc49ccd035d))
+- Release 0.3.2 ([c438d37](https://github.com/MooncellWiki/ak-asset-storage/commit/c438d3766cde02413422a913ed9d839d3673ed80))
 
 ## [0.3.1] - 2026-06-03
 
